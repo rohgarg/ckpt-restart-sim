@@ -1,11 +1,11 @@
-#!/sw/bin/python2.7
+#!/usr/bin/python2.7
 
 import simpy
 import os, sys, math, random
 
 
 """
-Single process checkpoint-restart simulator
+Simple FIFO batch queue simulator
 
 """
 RANDOM_SEED = 42
@@ -33,11 +33,11 @@ def time_to_checkpoint():
 class Process(object):
     """A process computes, checkpoints, and occasionaly incurs a failure.
 
-    If it fails, it restarts from the latest checkpoint. 
+    If it fails, it restarts from the latest checkpoint.
 
     """
-    def __init__(self, env, name, ckptTime, bq):
-        self.env = env
+    def __init__(self, myenv, name, ckptTime, bq):
+        self.env = myenv
         self.name = name
         self.broken = False
         self.totalComputeTime = time_per_process()
@@ -53,6 +53,7 @@ class Process(object):
         self.bq = bq
         self.startTime = 0
         self.submissionTime = 0
+        self.process = None
 
     def submitToQueue(self):
         # Start "compute" and "break_machine" processes for this machine.
@@ -61,8 +62,8 @@ class Process(object):
             yield req
             #print("%s: Starts running at %d" % (self.name, self.env.now))
             self.startTime = self.env.now
-            self.process = env.process(self.compute())
-            env.process(self.inject_failure())
+            self.process = self.env.process(self.compute())
+            self.env.process(self.inject_failure())
             yield self.process
 
     def compute(self):
@@ -98,7 +99,7 @@ class Process(object):
                 #print("%s: Done ckpting at %d, work left %d, ckpts %d, lastCkpt %d" % (self.name, self.env.now, self.workLeft, self.numCkpts, self.lastCheckpointTime))
 
             except simpy.Interrupt as e:
-                if (e.cause == "failure"):
+                if e.cause == "failure":
                     # fallback to the last checkpoint
                     if inTheMiddle:
                         inTheMiddle = False
@@ -132,7 +133,7 @@ class Process(object):
     def do_restart(self, timeSinceLastInterruption):
         """Restart the process after a failure."""
         delta = self.ckptTime
-        assert(self.broken == True)
+        assert self.broken == True
         try:
             #print("Attempting to restart from ckpt #%d, taken at %d" % (self.numCkpts, self.lastCheckpointTime))
             self.lostWork += timeSinceLastInterruption
@@ -141,9 +142,10 @@ class Process(object):
             #print("Restart successful... going back to compute")
         except simpy.Interrupt as e:
             if (e.cause == "failure"):
+                # TODO: Handle failures during a restart
                 print("Failure in the middle of a restart... will attempt restart again")
-                self.broken = True
-                self.do_restart()
+                exit(-1)
+                #self.do_restart()
 
     def __str__(self):
         return "%s, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d" %\
@@ -152,39 +154,47 @@ class Process(object):
                 self.startTime, self.endTime, self.actualRunTime)
 
 def simulateArrivalOfJobs(env, processes):
+    """Simulate random arrival of jobs"""
     # Submit four initial jobs
     for p in processes[:4]:
-       env.process(p.submitToQueue())
+        env.process(p.submitToQueue())
 
     # Create more cars while the simulation is running
     for p in processes[4:]:
         yield env.timeout(random.randint(5, 7))
         env.process(p.submitToQueue())
 
-# Setup and start the simulation
-print('Process checkpoint-restart simulator')
-random.seed(RANDOM_SEED)  # constant seed for reproducibility
+def main(argc, argv):
+    """Set up and start the simulation."""
 
-# Create an environment and start the setup process
-env = simpy.Environment()
+    print('Process checkpoint-restart simulator')
+    random.seed(RANDOM_SEED)  # constant seed for reproducibility
 
-# Create a batch queue
-batchQueue = simpy.Resource(env, MAX_PARALLEL_PROCESSES)
+    # Create an environment and start the setup process
+    env = simpy.Environment()
 
-processes = [Process(env, 'Process %d' % i, time_to_checkpoint(), batchQueue)
-             for i in range(NUM_PROCESSES)]
+    # Create a batch queue
+    batchQueue = simpy.Resource(env, MAX_PARALLEL_PROCESSES)
 
-env.process(simulateArrivalOfJobs(env, processes))
-# Execute
-env.run()
+    testProcesses = [Process(env, 'Process %d' % i, time_to_checkpoint(), batchQueue)
+                     for i in range(NUM_PROCESSES)]
 
-# Analyis/results
-print("******************************************************")
-print("******************FINAL DATA**************************")
-print("******************************************************")
-print("Process #, # Ckpts, # Total Failures, # Failure During Ckpt, Compute Time, Ckpt Time, Lost Work, Submission Time, Start Time, End Time, Actual Run Time")
-for p in processes:
-    if (int((p.numCkpts + p.numFailures) * p.ckptTime +\
-        p.lostWork + p.totalComputeTime) != int(p.actualRunTime)):
-      print "Warning"
-    print(p)
+    env.process(simulateArrivalOfJobs(env, testProcesses))
+    # Execute
+    env.run()
+
+    # Analyis/results
+    print("******************************************************")
+    print("******************FINAL DATA**************************")
+    print("******************************************************")
+    print("Process #, # Ckpts, # Total Failures, # Failure During Ckpt,"\
+          " Compute Time, Ckpt Time, Lost Work, Submission Time, Start Time,"\
+          " End Time, Actual Run Time")
+    for p in testProcesses:
+        if int((p.numCkpts + p.numFailures) * p.ckptTime +\
+           p.lostWork + p.totalComputeTime) != int(p.actualRunTime):
+            print("Warning")
+        print(p)
+
+if __name__ == "__main__":
+    main(len(sys.argv), sys.argv)
