@@ -46,18 +46,20 @@ class Process(object):
         self.numFailures = 0
         self.workLeft = self.totalComputeTime
         self.endTime = 0
-        self.submissionTime = env.now
         self.actualRunTime = 0
         self.lostWork = 0
         self.ckptTime = ckptTime
         self.ckptFailures = 0
         self.bq = bq
+        self.startTime = 0
+        self.submissionTime = 0
 
     def submitToQueue(self):
         # Start "compute" and "break_machine" processes for this machine.
+        self.submissionTime = self.env.now
         with self.bq.request() as req:
             yield req
-            print("%s: Starts running at %d" % (self.name, self.env.now))
+            #print("%s: Starts running at %d" % (self.name, self.env.now))
             self.startTime = self.env.now
             self.process = env.process(self.compute())
             env.process(self.inject_failure())
@@ -149,6 +151,15 @@ class Process(object):
                 self.totalComputeTime, self.ckptTime, self.lostWork, self.submissionTime,
                 self.startTime, self.endTime, self.actualRunTime)
 
+def simulateArrivalOfJobs(env, processes):
+    # Submit four initial jobs
+    for p in processes[:4]:
+       env.process(p.submitToQueue())
+
+    # Create more cars while the simulation is running
+    for p in processes[4:]:
+        yield env.timeout(random.randint(5, 7))
+        env.process(p.submitToQueue())
 
 # Setup and start the simulation
 print('Process checkpoint-restart simulator')
@@ -156,12 +167,14 @@ random.seed(RANDOM_SEED)  # constant seed for reproducibility
 
 # Create an environment and start the setup process
 env = simpy.Environment()
+
+# Create a batch queue
 batchQueue = simpy.Resource(env, MAX_PARALLEL_PROCESSES)
+
 processes = [Process(env, 'Process %d' % i, time_to_checkpoint(), batchQueue)
              for i in range(NUM_PROCESSES)]
 
-for p in processes:
-    env.process(p.submitToQueue())
+env.process(simulateArrivalOfJobs(env, processes))
 # Execute
 env.run()
 

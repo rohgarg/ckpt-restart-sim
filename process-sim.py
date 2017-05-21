@@ -9,21 +9,21 @@ Single process checkpoint-restart simulator
 
 """
 RANDOM_SEED = 42
-PT_MEAN = 1000.0        # Avg. processing time in minutes
+PT_MEAN = 500.0        # Avg. processing time in minutes
 PT_SIGMA = 100.0        # Sigma of processing time
-MTBF = 100.0           # Mean time to failure in minutes
+MTBF = 300.0           # Mean time to failure in minutes
 BREAK_MEAN = 1 / MTBF  # Param. for expovariate distribution
-NUM_PROCESSES = 20      # Number of processes
+NUM_PROCESSES = 10      # Number of processes
 
 
 def time_per_process():
     """Return a randomly generated compute time."""
-    return random.normalvariate(PT_MEAN, PT_SIGMA)
+    return int(random.normalvariate(PT_MEAN, PT_SIGMA))
 
 
 def time_to_failure():
     """Return time until next failure for a machine."""
-    return random.expovariate(BREAK_MEAN)
+    return int(random.expovariate(BREAK_MEAN))
     #return MTBF
 
 def time_to_checkpoint():
@@ -52,78 +52,67 @@ class Process(object):
         # Start "compute" and "break_machine" processes for this machine.
         self.process = env.process(self.compute())
         env.process(self.inject_failure())
-        env.process(self.checkpoint())
 
     def compute(self):
         """Simulate compute for the given amount of total work.
         """
+        inTheMiddle = False
         while self.workLeft:
             try:
                 # Start computing
                 start = self.env.now
-                yield self.env.timeout(self.workLeft)
-                self.workLeft = 0
-                self.endTime = self.env.now
+                #yield self.env.timeout(self.workLeft)
+                delta = self.ckptTime
+                oci = int(math.sqrt(2*MTBF*delta))
+                computeTime = min(oci, self.workLeft)
+                if computeTime <= 0:
+                    self.endTime = self.env.now
+                    self.env.exit()
+                yield self.env.timeout(computeTime)
+                #print("%s: Starting ckpting at %d, workleft %d" % (self.name, self.env.now, self.workLeft))
+                ckptStartTime = self.env.now
+                inTheMiddle = True
+                yield self.env.timeout(delta)
+                # Done with ckpting, now
+                #  first, save the progress made since the last interruption, and
+                timeSinceLastInterruption = ckptStartTime - start
+                self.workLeft -= timeSinceLastInterruption
+                #  second, update the latest ckpt time
+                self.lastCheckpointTime += timeSinceLastInterruption
+                # ... and increment the number of ckpts
+                self.numCkpts += 1
+                inTheMiddle = False
+                #print("%s: Done ckpting at %d, work left %d, ckpts %d, lastCkpt %d" % (self.name, self.env.now, self.workLeft, self.numCkpts, self.lastCheckpointTime))
 
             except simpy.Interrupt as e:
                 if (e.cause == "failure"):
                     # fallback to the last checkpoint
+                    if inTheMiddle:
+                        inTheMiddle = False
+                        print ("%s: Failure in the middle of a checkpoint at %d, lastCkpt %d, workLeft %d" % (self.name, self.env.now, self.lastCheckpointTime, self.workLeft))
                     self.broken = True
                     #print("Incurred a failure at %d, work left %d" % (self.env.now, self.workLeft))
                     restarting = self.env.process(self.do_restart(self.env.now - start))
                     yield restarting
                     #print("Done restarting at %d, work left %d, lost work %d" % (self.env.now, self.workLeft, self.lostWork))
                     self.broken = False
-                elif (e.cause == "checkpoint"):
-                    #print("Starting ckpting at %d, workleft %d" % (self.env.now, self.workLeft))
-                    self.broken = True
-                    ckpting = self.env.process(self.do_checkpoint(self.env.now - start))
-                    yield ckpting
-                    #print("Done ckpting at %d, work left %d, ckpts %d, lastCkpt %d" % (self.env.now, self.workLeft, self.numCkpts, self.lastCheckpointTime))
                 else:
                     print("Unexpected interrupt in the middle of computing")
                     exit(-1)
+        self.workLeft = 0
+        self.endTime = self.env.now
 
 
     def inject_failure(self):
         """Break the machine every now and then."""
         while self.workLeft:
             yield self.env.timeout(time_to_failure())
-            if self.env.now and not self.broken and self.workLeft:
+            if not self.broken and self.workLeft > 0:
                 # Only break the machine if it is currently computing.
+                #print("Injecting a failure at %d" %(self.env.now))
                 self.broken = True
                 self.numFailures += 1
                 self.process.interrupt(cause="failure")
-
-    def do_checkpoint(self, timeSinceLastInterruption):
-        delta = self.ckptTime
-        # Start ckpting
-        try:
-            start = self.env.now
-            yield self.env.timeout(delta)
-            # Done with ckpting, now
-            #  first, save the progress made since the last interruption, and
-            self.workLeft -= timeSinceLastInterruption
-            #  second, update the latest ckpt time
-            self.lastCheckpointTime += timeSinceLastInterruption
-            # ... and increment the number of ckpts
-            self.numCkpts += 1
-        except simpy.Interrupt as e:
-            if (e.cause == "failure"):
-                print("Failure in the middle of a checkpoint")
-                self.broken = True
-                self.env.process(self.do_restart())
-
-    def checkpoint(self):
-        """Checkpoint the process every now and then."""
-        while self.workLeft:
-            delta = self.ckptTime
-            oci = int(math.sqrt(2*MTBF*delta))
-            yield self.env.timeout(oci)
-            if not self.broken and oci < self.workLeft:
-                # Only checkpoint the machine if it is currently computing.
-                self.process.interrupt(cause="checkpoint")
-                yield self.env.timeout(delta) # wait for checkpoint to complete
 
     def do_restart(self, timeSinceLastInterruption):
         """Restart the process after a failure."""
