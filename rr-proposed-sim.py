@@ -6,10 +6,11 @@ import os, sys, math, random
 
 
 """
-FIFO batch queue simulator.
+Round-robin batch queue simulator.
 
 A process runs until the first failure. The scheduler then switches
-in the lightest process, which is then runs until completion.
+in the lightest process, which is then scheduled in a round-robin
+fashion with the other heavy process.
 """
 RANDOM_SEED = 42
 PT_MEAN = 1000.0       # Avg. processing time in minutes
@@ -22,7 +23,7 @@ MAX_CIRC_Q_LEN = NUM_PROCESSES + 1
 CKPT_THRESH = 10
 
 enableBqLogs = True
-enableProcLogs = True
+enableProcLogs = False
 
 def time_per_process():
     """Return a randomly generated compute time."""
@@ -54,6 +55,7 @@ class BatchQueue(object):
         self.numFailures = 0
         self.machine = nodes
         self.currentProc = None
+        self.preemptMode = False
 
     def BqLog(self, msg):
         """Logging mechanism for the batchqueue"""
@@ -116,8 +118,8 @@ class BatchQueue(object):
                     yield p.resumeCompleted
                     self.BqLog("Restarted %s" % (p.name))
                     start = self.env.now
-                if not with_preempt:
-                    # No round-robin scheduling after a fault
+                if not self.preemptMode:
+                    # No round-robin scheduling until at least one failure
                     self.BqLog("No RR: wait for %s to complete" %(p.name))
                     yield p.waitForComputeToEnd
                     self.BqLog("No RR: %s completed" %(p.name))
@@ -151,7 +153,10 @@ class BatchQueue(object):
                 self.switchingJobs = False
             except simpy.Interrupt as e:
                 if e.cause == "failure":
-                    if not with_preempt:
+                    if not self.preemptMode:
+                        self.BqLog("Starting Preemption now")
+                        self.preemptMode = True
+                        preemtionTime = time_to_preempt()
                         # First, add the current job for execution at a later time
                         self.BqLog("No RR: adding %s back for execution" % (p.name))
                         self.circQ.appendleft(p)
@@ -166,17 +171,20 @@ class BatchQueue(object):
                         self.circQ.appendleft(lightestProc)
                         p.process.interrupt(cause="failureNoRestart")
                         continue
-                    preemtionTime -= self.env.now - start
-                    p.broken = True
-                    if preemtionTime < CKPT_THRESH:
-                        self.circQ.append(p)
-                        p.process.interrupt(cause="failureNoRestart")
-                        self.BqLog("Not enough time %s to recover" % (p.name))
                     else:
-                        # Add the job back for execution
-                        self.BqLog("Adding %s back for execution" % (p.name))
-                        self.circQ.appendleft(p)
-                        p.process.interrupt(cause="failure")
+                        preemtionTime -= self.env.now - start
+                        p.broken = True
+                        if preemtionTime < CKPT_THRESH:
+                            # If near the end of execution, don't reschedule the job
+                            self.circQ.append(p)
+                            p.process.interrupt(cause="failureNoRestart")
+                            self.BqLog("Not enough time %s to recover" % (p.name))
+                        else:
+                            # If there's still some time before preemption,
+                            #   reschedule the job for execution again
+                            self.BqLog("Adding %s back for execution" % (p.name))
+                            self.circQ.appendleft(p)
+                            p.process.interrupt(cause="failure")
                 else:
                     self.BqLog("Unknown failure type. Exiting...")
                     exit(-1)
