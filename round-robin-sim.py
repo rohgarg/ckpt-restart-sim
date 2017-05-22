@@ -70,7 +70,7 @@ class BatchQueue(object):
         """Break the machine every now and then."""
         while len(self.circQ):
             yield self.env.timeout(time_to_failure())
-            if not len(self.circQ) and \
+            if len(self.circQ) > 0 and \
                not self.currentProc.broken and \
                self.currentProc.workLeft > 0:
                 # Only break the machine if it is currently computing,
@@ -261,7 +261,6 @@ class Process(object):
                         #self.ProcLog("Checkpointing failure, lastCkpt %d, workLeft %d" % (self.lastCheckpointTime, self.workLeft))
                     self.broken = False
                     self.numFailures += 1
-                    restarting = self.env.process(self.do_restart(self.env.now - start))
                     restarting = self.env.process(self.do_restart(self.env.now - start, True))
                     yield restarting
                     yield self.waitForBq
