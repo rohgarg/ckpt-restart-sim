@@ -3,7 +3,7 @@
 import simpy
 from collections import deque
 import os, sys, math, random
-
+import numpy as np
 
 """
 FIFO batch queue simulator.
@@ -16,10 +16,11 @@ PT_MEAN = 1000.0       # Avg. processing time in minutes
 PT_SIGMA = 100.0       # Sigma of processing time
 MTBF = 300.0           # Mean time to failure in minutes
 BREAK_MEAN = 1 / MTBF  # Param. for expovariate distribution
-NUM_PROCESSES = 2      # Number of processes
+NUM_PROCESSES = 3      # Number of processes
 MAX_PARALLEL_PROCESSES = 1
 MAX_CIRC_Q_LEN = NUM_PROCESSES + 1
 CKPT_THRESH = 10
+WEIBULL_K = 0.82
 
 enableBqLogs = True
 enableProcLogs = True
@@ -28,10 +29,11 @@ def time_per_process():
     """Return a randomly generated compute time."""
     return int(random.normalvariate(PT_MEAN, PT_SIGMA))
 
-
 def time_to_failure():
     """Return time until next failure for a machine."""
-    return int(random.expovariate(BREAK_MEAN))
+    #nextFailure = int(random.expovariate(BREAK_MEAN))
+    nextFailure = int(np.random.weibull(WEIBULL_K)*10.0)
+    return nextFailure
     #return MTBF
 
 def time_to_checkpoint():
@@ -382,7 +384,7 @@ def main(argc, argv):
     mymachine = simpy.Resource(env, MAX_PARALLEL_PROCESSES)
     batchQ = BatchQueue(env, MAX_CIRC_Q_LEN, mymachine)
 
-    testProcesses = [Process(env, 'Process %d' % i, time_to_checkpoint() + i*10, mymachine)
+    testProcesses = [Process(env, 'Process %d' % i, time_to_checkpoint() + random.randint(0, 5) * 10, mymachine)
                      for i in range(NUM_PROCESSES)]
 
     simulateArrivalOfJobs(env, testProcesses, batchQ)
