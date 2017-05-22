@@ -32,3 +32,10 @@ Proposed fault-aware RR queue sim, where all the jobs
 are submitted in the beginning, and the lightest job is
 switched in after a fault. The applications are then
 scheduled in a RR fashion with a fixed time quantum.
+
+## Dependencies
+
+The programs depend on SimPy, a Python-based discrete-event simulator
+package. You can use `pip` to install it locally.
+
+    $ sudo pip install simpy
