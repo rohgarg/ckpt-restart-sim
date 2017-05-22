@@ -345,13 +345,13 @@ class Process(object):
         """Restart the process after a failure."""
         delta = self.ckptTime
         try:
-            self.ProcLog("Attempting to restart from ckpt #%d, taken at %d" % (self.numCkpts, self.lastCheckpointTime))
             self.lostWork += timeSinceLastInterruption
             if not noRestart:
                 assert self.broken == True
+                self.ProcLog("Restart from ckpt #%d, taken at %d" % (self.numCkpts, self.lastCheckpointTime))
                 yield self.env.timeout(delta)
-            # Done with restart without errors
-            self.ProcLog("Restart successful... going back to compute")
+                # Done with restart without errors
+                self.ProcLog("Restart successful... going back to compute")
         except simpy.Interrupt as e:
             if (e.cause == "failure"):
                 # TODO: Handle failures during a restart
