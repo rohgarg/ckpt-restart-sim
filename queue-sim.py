@@ -159,7 +159,7 @@ def simulateArrivalOfJobs(env, processes):
     for p in processes[:4]:
         env.process(p.submitToQueue())
 
-    # Create more cars while the simulation is running
+    # Create more processes while the simulation is running
     for p in processes[4:]:
         yield env.timeout(random.randint(5, 7))
         env.process(p.submitToQueue())
