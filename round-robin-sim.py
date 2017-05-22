@@ -14,7 +14,7 @@ PT_MEAN = 1000.0        # Avg. processing time in minutes
 PT_SIGMA = 100.0        # Sigma of processing time
 MTBF = 300.0           # Mean time to failure in minutes
 BREAK_MEAN = 1 / MTBF  # Param. for expovariate distribution
-NUM_PROCESSES = 3      # Number of processes
+NUM_PROCESSES = 1      # Number of processes
 MAX_PARALLEL_PROCESSES = 1
 MAX_CIRC_Q_LEN = 5
 CKPT_THRESH = 10
@@ -49,6 +49,7 @@ class BatchQueue(object):
         self.switchingJobs = False
         self.numFailures = 0
         self.machine = nodes
+        self.currentProc = None
 
     def BqLog(self, msg):
         if enableBqLogs:
@@ -62,21 +63,25 @@ class BatchQueue(object):
 
     def runBq(self):
         self.process = self.env.process(self.runBqHelper())
+        self.env.process(self.inject_failure())
         yield self.process
-        #self.env.process(self.inject_failure())
 
     def inject_failure(self):
         """Break the machine every now and then."""
         while len(self.circQ):
             yield self.env.timeout(time_to_failure())
-            if not len(self.circQ):
-                # Only break the machine if it is currently computing.
-                #self.BqLog("Injecting a failure at %d" %(self.env.now))
-                self.broken = True
+            if not len(self.circQ) and \
+               not self.currentProc.broken and \
+               self.currentProc.workLeft > 0:
+                # Only break the machine if it is currently computing,
+                #  and if current proc is not restarting
+                #  TODO: Allow errors to be thrown while restarting
+                self.BqLog("Injecting a failure in %s" % (self.currentProc.name))
                 self.numFailures += 1
                 self.process.interrupt(cause="failure")
 
     def runBqHelper(self):
+        preemtionTime = time_to_preempt()
         while len(self.circQ) > 0:
           with self.machine.request() as req:
             yield req
@@ -87,19 +92,25 @@ class BatchQueue(object):
                     self.BqLog("Done with the queue")
                     continue
                 # Run, or Restart (if the process has at least one checkpoint)
-                if not p.haveCkpt:
+                self.currentProc = p
+                if not p.startAfresh:
                     start = self.env.now
+                    preemtionTime = time_to_preempt()
                     self.BqLog("Starting %s" %(p.name))
-                    p.process = self.env.process(p.runJob(p.haveCkpt))
+                    p.process = self.env.process(p.runJob(p.startAfresh))
+                elif p.broken:
+                    start = self.env.now
+                    self.BqLog("%s recovering from failure... nothing to do" %(p.name))
                 else:
                     self.BqLog("Resuming %s" % (p.name))
+                    preemtionTime = time_to_preempt()
                     p.waitForBq.succeed()
                     p.waitForBq = self.env.event()
                     yield p.resumeCompleted
                     self.BqLog("Restarted %s" % (p.name))
                     start = self.env.now
-                self.BqLog("Will preempt %s after %d" %(p.name, time_to_preempt()))
-                yield p.waitForComputeToEnd | self.env.timeout(time_to_preempt())
+                self.BqLog("Will preempt %s after %d" %(p.name, preemtionTime))
+                yield p.waitForComputeToEnd | self.env.timeout(preemtionTime)
                 if p.workLeft == 0:
                     self.BqLog("Done with %s." % (p.name))
                     if len(self.circQ) == 0:
@@ -126,8 +137,17 @@ class BatchQueue(object):
                 self.switchingJobs = False
             except simpy.Interrupt as e:
                 if e.cause == "failure":
-                    p.process.interrupt(cause="failure")
-                    self.circQ.append(p)
+                    preemtionTime -= self.env.now - start
+                    p.broken = True
+                    if preemtionTime < CKPT_THRESH:
+                        self.circQ.append(p)
+                        p.process.interrupt(cause="failureNoRestart")
+                        self.BqLog("Not enough time %s to recover" % (p.name))
+                    else:
+                        # Add the job back for execution
+                        self.BqLog("Adding %s back for execution" % (p.name))
+                        self.circQ.appendleft(p)
+                        p.process.interrupt(cause="failure")
                 else:
                     self.BqLog("Unknown failure type. Exiting...")
                     exit(-1)
@@ -157,7 +177,7 @@ class Process(object):
         self.startTime = 0
         self.submissionTime = 0
         self.process = None
-        self.haveCkpt = False # True once you have taken the first ckpt
+        self.startAfresh = False # True once you have taken the first ckpt
         self.isCkpting = myenv.event() # True during checkpointing
         self.waitForBq = myenv.event()
         self.waitForComputeToEnd = myenv.event()
@@ -216,7 +236,7 @@ class Process(object):
                 #  second, update the latest ckpt time
                 self.lastCheckpointTime += timeSinceLastInterruption
                 # ... and increment the number of ckpts
-                self.haveCkpt = True
+                self.startAfresh = True
                 self.numCkpts += 1
                 self.inTheMiddle = False
                 self.ProcLog("Done ckpting, work left %d, ckpts %d, lastCkpt %d" % (self.workLeft, self.numCkpts, self.lastCheckpointTime))
@@ -229,15 +249,29 @@ class Process(object):
                         #self.ProcLog("Checkpointing failure, lastCkpt %d, workLeft %d" % (self.lastCheckpointTime, self.workLeft))
                     self.broken = True
                     #self.ProcLog("Incurred a failure, work left %d" % (self.workLeft))
+                    self.numFailures += 1
                     restarting = self.env.process(self.do_restart(self.env.now - start))
                     yield restarting
-                    #self.ProcLog("Done restarting, work left %d, lost work %d" % (self.workLeft, self.lostWork))
+                    #self.ProcLog("Resumed after failure, work left %d, lost work %d" % (self.workLeft, self.lostWork))
                     self.broken = False
+                elif e.cause == "failureNoRestart":
+                    if self.inTheMiddle:
+                        self.inTheMiddle = False
+                        self.ckptFailures += 1
+                        #self.ProcLog("Checkpointing failure, lastCkpt %d, workLeft %d" % (self.lastCheckpointTime, self.workLeft))
+                    self.broken = False
+                    self.numFailures += 1
+                    restarting = self.env.process(self.do_restart(self.env.now - start))
+                    restarting = self.env.process(self.do_restart(self.env.now - start, True))
+                    yield restarting
+                    yield self.waitForBq
+                    self.ProcLog("Resumed after failureNoRestart")
+                    shouldRestart = True
                 elif e.cause == "preempt":
                     self.ProcLog("Preempted, workLeft %d" %(self.workLeft))
                     self.numOfPreempts += 1
                     yield self.waitForBq
-                    self.ProcLog("Resumed")
+                    self.ProcLog("Resumed after preemption")
                     shouldRestart = True
                 else:
                     print("Unexpected interrupt in the middle of computing")
@@ -261,7 +295,7 @@ class Process(object):
             #  second, update the latest ckpt time
             self.lastCheckpointTime += timeSinceLastInterruption
             # ... and increment the number of ckpts
-            self.haveCkpt = True
+            self.startAfresh = True
             self.numCkpts += 1
             self.isCkpting.succeed()
             self.isCkpting = self.env.event()
@@ -274,16 +308,17 @@ class Process(object):
                 self.isCkpting = self.env.event()
                 #self.ProcLog ("Checkpointing failure, lastCkpt %d, workLeft %d" % (self.lastCheckpointTime, self.workLeft))
 
-    def do_restart(self, timeSinceLastInterruption):
+    def do_restart(self, timeSinceLastInterruption, noRestart=False):
         """Restart the process after a failure."""
         delta = self.ckptTime
-        assert self.broken == True
         try:
-            #self.ProcLog("Attempting to restart from ckpt #%d, taken at %d" % (self.numCkpts, self.lastCheckpointTime))
+            self.ProcLog("Attempting to restart from ckpt #%d, taken at %d" % (self.numCkpts, self.lastCheckpointTime))
             self.lostWork += timeSinceLastInterruption
-            yield self.env.timeout(delta)
+            if not noRestart:
+                assert self.broken == True
+                yield self.env.timeout(delta)
             # Done with restart without errors
-            #self.ProcLog("Restart successful... going back to compute")
+            self.ProcLog("Restart successful... going back to compute")
         except simpy.Interrupt as e:
             if (e.cause == "failure"):
                 # TODO: Handle failures during a restart
