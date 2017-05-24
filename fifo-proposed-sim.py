@@ -1,10 +1,11 @@
-#!/usr/bin/python2.7
+#!/sw/bin/python2.7
 
 import simpy
 from simpy.util import start_delayed
 from collections import deque
 import os, sys, math, random
 import numpy as np
+import argparse
 from inspect import currentframe, getframeinfo
 
 """
@@ -403,15 +404,22 @@ def simulateArrivalOfJobs(env, processes, batchQ):
 
 def main(argc, argv):
     """Set up and start the simulation."""
+    global NUM_PROCESSES, enableProcLogs, enableBqLogs
 
     print('Process checkpoint-restart simulator')
     random.seed(RANDOM_SEED)  # constant seed for reproducibility
 
     # Create an environment and start the setup process
     env = simpy.Environment()
-    if argc > 1:
-      NUM_PROCESSES = int(sys.argv[1])
-      MAX_CIRC_Q_LEN = NUM_PROCESSES + 1
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--proc_logs", action="store_true", help="Show run time logs from processes")
+    parser.add_argument("-b", "--batchqueue_logs", action="store_true", help="Show run time logs from the batch-queue manager")
+    parser.add_argument("-n", "--procs", type=int, default=NUM_PROCESSES, help="max. number of processes to run simultaneously")
+    args = parser.parse_args()
+    NUM_PROCESSES = args.procs
+    MAX_CIRC_Q_LEN = NUM_PROCESSES + 1
+    enableProcLogs = args.proc_logs
+    enableBqLogs = args.batchqueue_logs
 
     # Create a batch queue
     mymachine = simpy.Resource(env, MAX_PARALLEL_PROCESSES)
