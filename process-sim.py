@@ -60,9 +60,8 @@ class Process(object):
         self.submissionTime = 0
         self.actualRunTime = 0
 
-        # Start "compute" and "break_machine" processes for this machine.
+        # Start "compute" process for this job
         self.process = env.process(self.compute())
-        env.process(self.inject_failure())
 
     def ProcLog(self, msg):
         if enableProcLogs:
@@ -83,15 +82,17 @@ class Process(object):
                 if computeTime <= 0:
                     self.endTime = self.env.now
                     self.actualRunTime = self.endTime - self.startTime
+                    self.ProcLog("Done.")
                     self.env.exit()
                 self.ProcLog("Computing for %d" % (computeTime))
                 yield self.env.timeout(computeTime)
 
                 if self.workLeft <= oci:
-                   self.workLeft = 0
-                   self.endTime = self.env.now
-                   self.actualRunTime = self.endTime - self.startTime
-                   self.env.exit()
+                     self.workLeft = 0
+                     self.endTime = self.env.now
+                     self.actualRunTime = self.endTime - self.startTime
+                     self.ProcLog("Done with all compute.")
+                     self.env.exit()
                 self.ProcLog("Starting ckpting, workleft %d" % (self.workLeft))
                 ckptStartTime = self.env.now
                 inTheMiddle = True
@@ -110,6 +111,7 @@ class Process(object):
             except simpy.Interrupt as e:
                 if (e.cause == "failure"):
                     # fallback to the last checkpoint
+                    self.numFailures += 1
                     if inTheMiddle:
                         inTheMiddle = False
                         self.ckptFailures += 1
@@ -135,16 +137,6 @@ class Process(object):
         self.actualRunTime = self.endTime - self.startTime
 
 
-    def inject_failure(self):
-        """Break the machine every now and then."""
-        while self.workLeft:
-            yield self.env.timeout(time_to_failure())
-            if self.workLeft > 0:
-                # Only break the machine if it is currently computing.
-                self.ProcLog("Injecting a failure")
-                self.numFailures += 1
-                self.process.interrupt(cause="failure")
-
     def do_restart(self, timeSinceLastInterruption):
         """Restart the process after a failure."""
         delta = self.ckptTime
@@ -168,6 +160,7 @@ class Process(object):
             except simpy.Interrupt as e:
                 failureInTheMiddle = True
                 self.restartFailures += 1
+                self.numFailures += 1
                 self.lostRestartTime += self.env.now - restartStartTime
                 if e.cause == "failure":
                     self.ProcLog("Restart failure... will attempt restart again")
@@ -178,6 +171,19 @@ class Process(object):
                 self.ckptFailures, self.numOfPreempts, self.totalComputeTime, self.ckptTime,
                 self.lostWork, self.lostRestartTime, self.lostCkptTime, self.submissionTime,
                 self.startTime, self.endTime, self.actualRunTime)
+
+def inject_failure(env, procs, verbose):
+    """Break the machine every now and then."""
+    liveProcs = len(procs)
+    while liveProcs > 0:
+        yield env.timeout(time_to_failure())
+        for p in procs:
+            if p.workLeft > 0:
+                # Only break the machine if it is currently computing.
+                if verbose: print("[%d] Injecting a failure in %s" % (env.now, p.name))
+                p.process.interrupt(cause="failure")
+                continue
+            liveProcs -= 1
 
 
 # Setup and start the simulation
@@ -197,6 +203,8 @@ random.seed(RANDOM_SEED)  # constant seed for reproducibility
 env = simpy.Environment()
 processes = [Process(env, 'Process %d' % i, time_to_checkpoint())
              for i in range(NUM_PROCESSES)]
+
+env.process(inject_failure(env, processes, args.verbosity))
 
 # Execute
 env.run()
