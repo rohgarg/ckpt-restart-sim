@@ -211,7 +211,6 @@ class Process(object):
         self.startTime = 0
         self.submissionTime = 0
         self.process = None
-        self.isCkpting = myenv.event() # True during checkpointing
         self.waitForBq = myenv.event()
         self.waitForComputeToEnd = myenv.event()
         self.resumeCompleted = myenv.event()
@@ -280,28 +279,16 @@ class Process(object):
                    self.env.exit()
 
                 self.ProcLog("Ckpting, workleft %d" % (self.workLeft))
-                ckptStartTime = self.env.now
                 self.inTheMiddle = True
-                yield self.env.timeout(delta)
-
-                # Done with ckpting, now
-                #  first, save the progress made since the last interruption, and
-                self.lastCkptInstant = self.env.now
-                timeSinceLastInterruption = ckptStartTime - start
-                self.workLeft -= timeSinceLastInterruption
-                #  second, update the latest ckpt time
-                self.lastCheckpointTime += timeSinceLastInterruption
-                # ... and increment the number of ckpts
-                self.numCkpts += 1
+                ckptingProc = self.env.process(self.do_ckpt())
+                yield ckptingProc
                 self.inTheMiddle = False
-                self.ProcLog("Done ckpting, work left %d, ckpts %d, lastCkpt %d" % (self.workLeft, self.numCkpts, self.lastCheckpointTime))
             except simpy.Interrupt as e:
                 if e.cause == "failure":
                     # fallback to the last checkpoint
                     if self.inTheMiddle:
                         self.inTheMiddle = False
-                        self.ckptFailures += 1
-                        self.lostCkptTime += self.env.now - ckptStartTime
+                        ckptingProc.interrupt(e.cause)
                         self.ProcLog("Checkpointing failure, lastCkpt %d, workLeft %d" % (self.lastCheckpointTime, self.workLeft))
                     self.isRestarting = True
                     self.ProcLog("Incurred a failure, work left %d" % (self.workLeft))
@@ -319,8 +306,8 @@ class Process(object):
                 elif e.cause == "preemptImmediate":
                     if self.inTheMiddle:
                         self.inTheMiddle = False
-                        self.ckptFailures += 1
-                        #self.ProcLog("Checkpointing failure, lastCkpt %d, workLeft %d" % (self.lastCheckpointTime, self.workLeft))
+                        ckptingProc.interrupt(e.cause)
+                        self.ProcLog("Checkpointing failure, lastCkpt %d, workLeft %d" % (self.lastCheckpointTime, self.workLeft))
                     self.isRestarting = False
                     self.numFailures += 1
                     restarting = self.env.process(self.do_restart(self.env.now - start, True))
@@ -329,13 +316,6 @@ class Process(object):
                     yield self.waitForBq
                     self.ProcLog("Resumed after preemptImmediate")
                     # Need to restart the job from its latest ckpt
-                    self.isPreempted = True
-                elif e.cause == "preempt":
-                    self.ProcLog("Preempted, workLeft %d" %(self.workLeft))
-                    self.numOfPreempts += 1
-                    yield self.waitForBq
-                    self.ProcLog("Resumed after preemption")
-                    # Need to restart the job
                     self.isPreempted = True
                 else:
                     print("Unexpected interrupt in the middle of computing")
@@ -347,7 +327,7 @@ class Process(object):
         self.inTheMiddle = False
         try:
             delta = self.ckptTime
-            self.ProcLog("Forced ckpting, workleft %d" % (self.workLeft))
+            self.ProcLog("Ckpting, workleft %d" % (self.workLeft))
             self.inTheMiddle = True
             ckptStartTime = self.env.now
             yield self.env.timeout(delta)
@@ -359,16 +339,13 @@ class Process(object):
             self.lastCheckpointTime += timeSinceLastInterruption
             # ... and increment the number of ckpts
             self.numCkpts += 1
-            self.isCkpting.succeed()
-            self.isCkpting = self.env.event()
             self.inTheMiddle = False
-            self.ProcLog("Done forced ckpting, work left %d, ckpts %d, lastCkpt %d" % (self.workLeft, self.numCkpts, self.lastCheckpointTime))
+            self.ProcLog("Done ckpting, work left %d, ckpts %d, lastCkpt %d" % (self.workLeft, self.numCkpts, self.lastCheckpointTime))
         except simpy.Interrupt as e:
             if e.cause in ["failure", "preemptImmediate"]:
                 self.ckptFailures += 1
+                self.inTheMiddle = False
                 self.lostCkptTime += self.env.now - ckptStartTime
-                self.isCkpting.fail()
-                self.isCkpting = self.env.event()
                 self.ProcLog("Checkpointing failure, lastCkpt %d, workLeft %d" % (self.lastCheckpointTime, self.workLeft))
 
     def do_restart(self, timeSinceLastInterruption, noRestart=False):
