@@ -82,6 +82,7 @@ class Process(object):
                 computeTime = min(oci, self.workLeft)
                 if computeTime <= 0:
                     self.endTime = self.env.now
+                    self.actualRunTime = self.endTime - self.startTime
                     self.env.exit()
                 self.ProcLog("Computing for %d" % (computeTime))
                 yield self.env.timeout(computeTime)
@@ -89,6 +90,7 @@ class Process(object):
                 if self.workLeft <= oci:
                    self.workLeft = 0
                    self.endTime = self.env.now
+                   self.actualRunTime = self.endTime - self.startTime
                    self.env.exit()
                 self.ProcLog("Starting ckpting, workleft %d" % (self.workLeft))
                 ckptStartTime = self.env.now
@@ -130,6 +132,7 @@ class Process(object):
                     exit(-1)
         self.workLeft = 0
         self.endTime = self.env.now
+        self.actualRunTime = self.endTime - self.startTime
 
 
     def inject_failure(self):
@@ -179,8 +182,14 @@ class Process(object):
 
 # Setup and start the simulation
 print('Process checkpoint-restart simulator')
-if len(sys.argv) > 1:
-    NUM_PROCESSES = int(sys.argv[1])
+
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("-v", "--verbosity", action="store_true", help="Show run time logs from processes")
+parser.add_argument("-n", "--procs", type=int, default=NUM_PROCESSES, help="max. number of processes to run simultaneously")
+args = parser.parse_args()
+NUM_PROCESSES = args.procs
+enableProcLogs = args.verbosity
 
 random.seed(RANDOM_SEED)  # constant seed for reproducibility
 
@@ -200,7 +209,9 @@ print("Process #, # Ckpts, # Total Failures, # Restarts, # Failed Restarts, # Fa
       " Compute Time, Ckpt Time, Lost Work, Lost Restart Time, Lost Ckpt Time, Submission Time, Start Time,"\
       " End Time, Actual Run Time")
 for p in processes:
-    if (int((p.numCkpts + p.numFailures) * p.ckptTime +\
-        p.lostWork + p.totalComputeTime) != int(p.endTime)):
-      print "Warning"
+    t1 = int((p.numCkpts + p.numRestarts) * p.ckptTime + p.lostWork + p.totalComputeTime + p.lostRestartTime)
+    t2 = int(p.actualRunTime)
+    assert p.restartFailures * p.ckptTime >= p.lostRestartTime
+    if t1 != t2:
+        print("Warning: %d != %d" % (t1, t2))
     print(p)
