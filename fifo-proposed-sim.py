@@ -5,7 +5,7 @@ from simpy.util import start_delayed
 from collections import deque
 import os, sys, math, random
 import numpy as np
-import argparse
+import argparse as ap
 from inspect import currentframe, getframeinfo
 
 """
@@ -23,6 +23,17 @@ NUM_PROCESSES = 7      # Number of processes
 MAX_PARALLEL_PROCESSES = 1
 MAX_CIRC_Q_LEN = NUM_PROCESSES + 1
 CKPT_THRESH = 10
+
+HELP="This simulator implements the following policy.\n\n"\
+     "  - All the jobs are submitted at the beginning\n\n"\
+     "  - After a fault, the currently executing job is immediately killed,\n"\
+     "    and the job with the smallest checkpointing overhead is switched\n"\
+     "    in. The currently executing job that was killed is scheduled to\n"\
+     "    be executed next, to ensure fairness. (That said, it can be delayed\n"\
+     "    for a long time, if there are other jobs with smaller checkpointing\n"\
+     "    overheads.)\n\n"\
+     "  -  The job with the smallest checkpointing overhead will continue\n"\
+     "     to execute until it finishes.\n"
 
 # Shape parameter for Weibull distr.
 WEIBULL_K = 0.96
@@ -53,14 +64,14 @@ def time_to_preempt():
 class BatchQueue(object):
     """Represents and simulates a batch queue"""
 
-    def __init__(self, myenv, max_circ_length, nodes):
+    def __init__(self, myenv, max_circ_length, nodes, noPreemption=False):
         self.env = myenv
         self.maxLength = max_circ_length
         self.circQ = deque([], self.maxLength)
         self.allJobs = []
         self.numPreempts = 0
         self.process = None
-        self.switchingJobs = False
+        self.noPreemption = noPreemption
         self.numFailures = 0
         self.machine = nodes
         self.currentProc = None
@@ -150,6 +161,11 @@ class BatchQueue(object):
                     # First, add the current job for execution at a later time
                     self.BqLog("Adding %s back for execution" % (p.name))
                     self.circQ.appendleft(p)
+                    if self.noPreemption:
+                        # Force simple FIFO queue, with no preemption
+                        p.isRestarting = True
+                        p.process.interrupt(cause="failure")
+                        continue
                     # Next, schedule the job with the min. ckpting overhead for execution
                     lightestProc = min(self.allJobs, key=lambda p:p.ckptTime)
                     if p.name == lightestProc.name:
@@ -404,17 +420,20 @@ def simulateArrivalOfJobs(env, processes, batchQ):
 
 def main(argc, argv):
     """Set up and start the simulation."""
-    global NUM_PROCESSES, enableProcLogs, enableBqLogs
+    global NUM_PROCESSES, enableProcLogs, enableBqLogs, HELP
 
     print('Process checkpoint-restart simulator')
     random.seed(RANDOM_SEED)  # constant seed for reproducibility
 
     # Create an environment and start the setup process
     env = simpy.Environment()
-    parser = argparse.ArgumentParser()
+    parser = ap.ArgumentParser(description=HELP, formatter_class=ap.RawTextHelpFormatter)
     parser.add_argument("-p", "--proc_logs", action="store_true", help="Show run time logs from processes")
     parser.add_argument("-b", "--batchqueue_logs", action="store_true", help="Show run time logs from the batch-queue manager")
-    parser.add_argument("-n", "--procs", type=int, default=NUM_PROCESSES, help="max. number of processes to run simultaneously")
+    parser.add_argument("-n", "--procs", type=int, default=NUM_PROCESSES, help="Max. number of processes to simulate (default: 7)")
+    parser.add_argument("-x", "--no_preempt", action="store_true", help="Disables preemption of currently executing "\
+                                                                        "job on failure. This simulates the behavior "\
+                                                                        "of a simple FIFO queue.")
     args = parser.parse_args()
     NUM_PROCESSES = args.procs
     MAX_CIRC_Q_LEN = NUM_PROCESSES + 1
@@ -423,7 +442,7 @@ def main(argc, argv):
 
     # Create a batch queue
     mymachine = simpy.Resource(env, MAX_PARALLEL_PROCESSES)
-    batchQ = BatchQueue(env, MAX_CIRC_Q_LEN, mymachine)
+    batchQ = BatchQueue(env, MAX_CIRC_Q_LEN, mymachine, args.no_preempt)
 
     testProcesses = [Process(env, 'Process %d' % i, time_to_checkpoint() + random.randint(0, 5) * 10, mymachine)
                      for i in range(NUM_PROCESSES)]
