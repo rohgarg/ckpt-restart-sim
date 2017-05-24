@@ -1,4 +1,4 @@
-#!/sw/bin/python2.7
+#!/usr/bin/python2.7
 
 import simpy
 from simpy.util import start_delayed
@@ -7,6 +7,9 @@ import os, sys, math, random
 import numpy as np
 import argparse as ap
 from inspect import currentframe, getframeinfo
+import matplotlib
+matplotlib.use("TkAgg")
+import matplotlib.pyplot as plt
 
 """
 FIFO batch queue simulator.
@@ -17,12 +20,13 @@ in the lightest process, which is then runs until completion.
 RANDOM_SEED = 42
 PT_MEAN = 1000.0       # Avg. processing time in minutes
 PT_SIGMA = 100.0       # Sigma of processing time
-MTBF = 50.0           # Mean time to failure in minutes
+MTBF = 50.0            # Mean time to failure in minutes
 BREAK_MEAN = 1 / MTBF  # Param. for expovariate distribution
 NUM_PROCESSES = 7      # Number of processes
 MAX_PARALLEL_PROCESSES = 1
 MAX_CIRC_Q_LEN = NUM_PROCESSES + 1
 CKPT_THRESH = 10
+MONITOR_GAP = 5.0      # We note the various params every MONITOR_GAP time units
 
 HELP="This simulator implements the following policy.\n\n"\
      "  - All the jobs are submitted at the beginning\n\n"\
@@ -43,6 +47,7 @@ INITIAL_FAILURE_DELAY = 200
 
 enableBqLogs = False
 enableProcLogs = False
+useWeibull = False
 
 def time_per_process():
     """Return a randomly generated compute time."""
@@ -50,9 +55,11 @@ def time_per_process():
 
 def time_to_failure():
     """Return time until next failure for a machine."""
-    nextFailure = int(random.expovariate(BREAK_MEAN))
-    # The Weibull distr. is somehow generating too many errors
-    #nextFailure = int(np.random.weibull(WEIBULL_K)*10.0) + MTBF
+    if not useWeibull:
+        nextFailure = int(random.expovariate(BREAK_MEAN))
+    else:
+        # The Weibull distr. generates many errors.
+        nextFailure = int(np.random.weibull(WEIBULL_K)*10.0) + MTBF
     return nextFailure
     #return MTBF
 
@@ -76,6 +83,9 @@ class BatchQueue(object):
         self.numFailures = 0
         self.machine = nodes
         self.currentProc = None
+        self.workDoneOverTime = []
+        self.lostWorkOverTime = []
+        self.savedJobs = []
 
     def BqLog(self, msg):
         """Logging mechanism for the batchqueue"""
@@ -93,12 +103,24 @@ class BatchQueue(object):
     def runBq(self, with_preempt):
         self.process = self.env.process(self.runBqHelper(with_preempt))
         start_delayed(self.env, self.inject_failure(), INITIAL_FAILURE_DELAY)
+        self.env.process(self.monitorWorkDone())
+        self.savedJobs = self.allJobs[:]
         while True:
             try:
                 yield self.process
                 self.env.exit()
             except simpy.Interrupt as e:
                 self.process.interrupt(e.cause)
+
+    def monitorWorkDone(self):
+        while len(self.circQ) > 0 or (self.currentProc and self.currentProc.workLeft > 0):
+           yield self.env.timeout(MONITOR_GAP)
+           if len(self.circQ) >= 0 and \
+               self.currentProc and self.currentProc.workLeft > 0:
+               twd = sum([p.totalComputeTime - p.workLeft for p in self.savedJobs])
+               lw = sum([p.lostWork for p in self.savedJobs])
+               self.workDoneOverTime.append(twd)
+               self.lostWorkOverTime.append(lw)
 
     def inject_failure(self):
         """Break the machine every now and then."""
@@ -396,9 +418,64 @@ def simulateArrivalOfJobs(env, processes, batchQ):
     for p in processes:
         batchQ.addToBq(p)
 
+def showResults(args, res):
+    failureDistr = "Weibull" if useWeibull else "Exponential"
+    preempt = "Without Preemption" if args.no_preempt else "With Preemption"
+
+    f, axs = plt.subplots(3, 2, sharex=True)
+    f.suptitle("%s (Failure injection using %s distr.)" % (preempt, failureDistr))
+    if args.show_throughput_results:
+        axs[0,0].set_title("Work done (Throughput)")
+        axs[0,0].plot(res[0], label="Instant")
+        axs[0,0].set_ylabel("Work done over last 5 time units")
+        axs[1,0].plot(res[1], label="Work Done/Current Time")
+        axs[1,0].set_ylabel("Work done/Current Time")
+        axs[2,0].plot(res[2], label="Work Done")
+        axs[2,0].set_ylabel("Work done")
+        axs[2,0].set_xlabel("Time")
+    if args.show_lostwork_results:
+        axs[0,1].set_title("Lost Work due to failures")
+        axs[0,1].plot(res[3], label="Instantenous Lost Work")
+        axs[0,1].set_ylabel("Lost work over last 5 time units")
+        axs[1,1].plot(res[4], label="Lost work/Current Time")
+        axs[1,1].set_ylabel("Lost work/Current Time")
+        axs[2,1].plot(res[5], label="Lost work")
+        axs[2,1].set_ylabel("Lost Work")
+        axs[2,1].set_xlabel("Time")
+
+def saveResults(args, res):
+    failureDistr = "Weibull" if useWeibull else "Exponential"
+    preempt = "woPreempt" if args.no_preempt else "wPreempt"
+    if (args.file_name):
+        origFileName = args.file_name
+        fileName = "%s-%s-%s-%sWd.csv" % (origFileName, preempt, failureDistr[:3], "instantenous")
+        res[0].tofile(fileName, sep=',')
+        fileName = "%s-%s-%s-Wd%s.csv" % (origFileName, preempt, failureDistr[:3], "OverTime")
+        res[1].tofile(fileName, sep=',')
+        fileName = "%s-%s-%s-Wd.csv" % (origFileName, preempt, failureDistr[:3])
+        res[2].tofile(fileName, sep=',')
+        fileName = "%s-%s-%s-%sLw.csv" % (origFileName, preempt, failureDistr[:3], "instantenous")
+        res[3].tofile(fileName, sep=',')
+        fileName = "%s-%s-%s-Lw%s.csv" % (origFileName, preempt, failureDistr[:3], "OverTime")
+        res[4].tofile(fileName, sep=',')
+        fileName = "%s-%s-%s-Lw.csv" % (origFileName, preempt, failureDistr[:3])
+        res[5].tofile(fileName, sep=',')
+
+def computeResults(args, batchQ):
+    tmp = batchQ.workDoneOverTime
+    instantenousWd = np.asarray(np.diff(tmp))
+    WdOverTime = np.asarray([x/float(i*MONITOR_GAP) for (x,i) in zip(tmp, range(len(tmp))) if i > 0.0])
+    Wd  = np.asarray(tmp)
+
+    tmp = batchQ.lostWorkOverTime
+    instantenousLw = np.asarray(np.diff(tmp))
+    LwOverTime = np.asarray([x/float(i*MONITOR_GAP) for (x,i) in zip(tmp, range(len(tmp))) if i > 0.0])
+    Lw  = np.asarray(tmp)
+    return (instantenousWd, WdOverTime, Wd, instantenousLw, LwOverTime, Lw)
+
 def main(argc, argv):
     """Set up and start the simulation."""
-    global NUM_PROCESSES, enableProcLogs, enableBqLogs, HELP
+    global NUM_PROCESSES, enableProcLogs, enableBqLogs, HELP, useWeibull
 
     print('Process checkpoint-restart simulator')
     random.seed(RANDOM_SEED)  # constant seed for reproducibility
@@ -412,15 +489,21 @@ def main(argc, argv):
     parser.add_argument("-x", "--no_preempt", action="store_true", help="Disables preemption of currently executing "\
                                                                         "job on failure. This simulates the behavior "\
                                                                         "of a simple FIFO queue.")
+    parser.add_argument("-w", "--use-weibull", action="store_true", help="Use Weibull distribution for failure injection. Default is to use exponential distribution")
+    parser.add_argument("-f", "--file-name", type=str, help="Store lost work/throughput results in the given file.")
+    parser.add_argument("-s", "--show-throughput-results", action="store_true", help="Show throughput results using matplotlib.")
+    parser.add_argument("-l", "--show-lostwork-results", action="store_true", help="Show lost work results using matplotlib.")
     args = parser.parse_args()
     NUM_PROCESSES = args.procs
     MAX_CIRC_Q_LEN = NUM_PROCESSES + 1
     enableProcLogs = args.proc_logs
     enableBqLogs = args.batchqueue_logs
+    useWeibull = args.use_weibull
 
     # Create a batch queue
     mymachine = simpy.Resource(env, MAX_PARALLEL_PROCESSES)
     batchQ = BatchQueue(env, MAX_CIRC_Q_LEN, mymachine, args.no_preempt)
+    showPlot = args.show_throughput_results | args.show_lostwork_results
 
     testProcesses = [Process(env, 'Process %d' % i, time_to_checkpoint() + random.randint(0, 5) * 10, mymachine)
                      for i in range(NUM_PROCESSES)]
@@ -434,6 +517,11 @@ def main(argc, argv):
     print("******************************************************")
     print("******************FINAL DATA**************************")
     print("******************************************************")
+
+    res = computeResults(args, batchQ)
+    saveResults(args, res)
+    showResults(args, res)
+
     print("Process #, # Ckpts, # Total Failures, # Restarts, # Failed Restarts, # Failed Ckpts, # Preempts,"\
           " Compute Time, Ckpt Time, Lost Work, Lost Restart Time, Lost Ckpt Time, Submission Time, Start Time,"\
           " End Time, Actual Run Time")
@@ -445,6 +533,8 @@ def main(argc, argv):
         if t1 != t2:
             print("Warning: %d != %d" % (t1, t2))
         print(p)
+    if showPlot:
+        plt.show()
 
 if __name__ == "__main__":
     main(len(sys.argv), sys.argv)
