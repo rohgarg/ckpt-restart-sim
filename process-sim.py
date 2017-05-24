@@ -2,6 +2,7 @@
 
 import simpy
 import os, sys, math, random
+from inspect import currentframe, getframeinfo
 
 
 """
@@ -13,8 +14,9 @@ PT_MEAN = 500.0        # Avg. processing time in minutes
 PT_SIGMA = 100.0        # Sigma of processing time
 MTBF = 300.0           # Mean time to failure in minutes
 BREAK_MEAN = 1 / MTBF  # Param. for expovariate distribution
-NUM_PROCESSES = 10      # Number of processes
+NUM_PROCESSES = 1      # Number of processes
 
+enableProcLogs = True
 
 def time_per_process():
     """Return a randomly generated compute time."""
@@ -38,7 +40,7 @@ class Process(object):
     def __init__(self, env, name, ckptTime):
         self.env = env
         self.name = name
-        self.broken = False
+        self.isRestarting = False
         self.totalComputeTime = time_per_process()
         self.lastCheckpointTime = 0
         self.numCkpts = 0
@@ -48,10 +50,23 @@ class Process(object):
         self.endTime = 0
         self.lostWork = 0
         self.ckptTime = ckptTime
+        self.restartFailures = 0
+        self.lostRestartTime = 0
+        self.numRestarts = 0
+        self.ckptFailures = 0
+        self.numOfPreempts = 0
+        self.lostCkptTime = 0
+        self.lostRestartTime = 0
+        self.submissionTime = 0
+        self.actualRunTime = 0
 
         # Start "compute" and "break_machine" processes for this machine.
         self.process = env.process(self.compute())
         env.process(self.inject_failure())
+
+    def ProcLog(self, msg):
+        if enableProcLogs:
+            print("[%d][%4d]: %s: %s" % (self.env.now, currentframe().f_back.f_lineno, self.name, msg))
 
     def compute(self):
         """Simulate compute for the given amount of total work.
@@ -68,8 +83,14 @@ class Process(object):
                 if computeTime <= 0:
                     self.endTime = self.env.now
                     self.env.exit()
+                self.ProcLog("Computing for %d" % (computeTime))
                 yield self.env.timeout(computeTime)
-                #print("%s: Starting ckpting at %d, workleft %d" % (self.name, self.env.now, self.workLeft))
+
+                if self.workLeft <= oci:
+                   self.workLeft = 0
+                   self.endTime = self.env.now
+                   self.env.exit()
+                self.ProcLog("Starting ckpting, workleft %d" % (self.workLeft))
                 ckptStartTime = self.env.now
                 inTheMiddle = True
                 yield self.env.timeout(delta)
@@ -82,20 +103,28 @@ class Process(object):
                 # ... and increment the number of ckpts
                 self.numCkpts += 1
                 inTheMiddle = False
-                #print("%s: Done ckpting at %d, work left %d, ckpts %d, lastCkpt %d" % (self.name, self.env.now, self.workLeft, self.numCkpts, self.lastCheckpointTime))
+                #self.ProcLog("Done ckpting, work left %d, ckpts %d, lastCkpt %d" % (self.workLeft, self.numCkpts, self.lastCheckpointTime))
 
             except simpy.Interrupt as e:
                 if (e.cause == "failure"):
                     # fallback to the last checkpoint
                     if inTheMiddle:
                         inTheMiddle = False
-                        print ("%s: Failure in the middle of a checkpoint at %d, lastCkpt %d, workLeft %d" % (self.name, self.env.now, self.lastCheckpointTime, self.workLeft))
-                    self.broken = True
-                    #print("Incurred a failure at %d, work left %d" % (self.env.now, self.workLeft))
+                        self.ckptFailures += 1
+                        self.lostCkptTime += self.env.now - ckptStartTime
+                        self.ProcLog("Ckpt failure, lastCkpt %d, workLeft %d" % (self.lastCheckpointTime, self.workLeft))
+                    self.isRestarting = True
+                    #self.ProcLog("Incurred a failure, work left %d" % (self.workLeft))
                     restarting = self.env.process(self.do_restart(self.env.now - start))
-                    yield restarting
-                    #print("Done restarting at %d, work left %d, lost work %d" % (self.env.now, self.workLeft, self.lostWork))
-                    self.broken = False
+                    while True:
+                        try:
+                            yield restarting
+                            break
+                        except simpy.Interrupt as e:
+                            self.ProcLog("Restart received: %s" %(e.cause))
+                            restarting.interrupt(cause=e.cause)
+                    #self.ProcLog("Done restarting, work left %d, lost work %d" % (self.workLeft, self.lostWork))
+                    self.isRestarting = False
                 else:
                     print("Unexpected interrupt in the middle of computing")
                     exit(-1)
@@ -107,32 +136,52 @@ class Process(object):
         """Break the machine every now and then."""
         while self.workLeft:
             yield self.env.timeout(time_to_failure())
-            if not self.broken and self.workLeft > 0:
+            if self.workLeft > 0:
                 # Only break the machine if it is currently computing.
-                #print("Injecting a failure at %d" %(self.env.now))
-                self.broken = True
+                self.ProcLog("Injecting a failure")
                 self.numFailures += 1
                 self.process.interrupt(cause="failure")
 
     def do_restart(self, timeSinceLastInterruption):
         """Restart the process after a failure."""
         delta = self.ckptTime
-        assert(self.broken == True)
-        try:
-            #print("Attempting to restart from ckpt #%d, taken at %d" % (self.numCkpts, self.lastCheckpointTime))
-            self.lostWork += timeSinceLastInterruption
-            yield self.env.timeout(delta)
-            # Done with restart without errors
-            #print("Restart successful... going back to compute")
-        except simpy.Interrupt as e:
-            if (e.cause == "failure"):
-                print("Failure in the middle of a restart... will attempt restart again")
-                self.broken = True
-                self.do_restart()
+        failureInTheMiddle = False
+        while True:
+            try:
+                if not failureInTheMiddle:
+                    self.lostWork += timeSinceLastInterruption
+                if self.numCkpts > 0:
+                    assert self.isRestarting == True
+                    self.ProcLog("Attempting to restart from ckpt #%d, taken at %d" % (self.numCkpts, self.lastCheckpointTime))
+                    restartStartTime = self.env.now
+                    yield self.env.timeout(delta)
+                    self.numRestarts += 1
+                    # Done with restart without errors
+                    self.ProcLog("Restart successful... going back to compute")
+                    self.env.exit()
+                else:
+                    self.ProcLog("Nothing to do for restart")
+                    self.env.exit()
+            except simpy.Interrupt as e:
+                failureInTheMiddle = True
+                self.restartFailures += 1
+                self.lostRestartTime += self.env.now - restartStartTime
+                if e.cause == "failure":
+                    self.ProcLog("Restart failure... will attempt restart again")
+
+    def __str__(self):
+        return "%s, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d" %\
+               (self.name, self.numCkpts, self.numFailures, self.numRestarts, self.restartFailures,
+                self.ckptFailures, self.numOfPreempts, self.totalComputeTime, self.ckptTime,
+                self.lostWork, self.lostRestartTime, self.lostCkptTime, self.submissionTime,
+                self.startTime, self.endTime, self.actualRunTime)
 
 
 # Setup and start the simulation
 print('Process checkpoint-restart simulator')
+if len(sys.argv) > 0:
+    NUM_PROCESSES = int(sys.argv[1])
+
 random.seed(RANDOM_SEED)  # constant seed for reproducibility
 
 # Create an environment and start the setup process
@@ -144,13 +193,14 @@ processes = [Process(env, 'Process %d' % i, time_to_checkpoint())
 env.run()
 
 # Analyis/results
+print("******************************************************")
+print("******************FINAL DATA**************************")
+print("******************************************************")
+print("Process #, # Ckpts, # Total Failures, # Restarts, # Failed Restarts, # Failed Ckpts, # Preempts,"\
+      " Compute Time, Ckpt Time, Lost Work, Lost Restart Time, Lost Ckpt Time, Submission Time, Start Time,"\
+      " End Time, Actual Run Time")
 for p in processes:
     if (int((p.numCkpts + p.numFailures) * p.ckptTime +\
         p.lostWork + p.totalComputeTime) != int(p.endTime)):
       print "Warning"
-    print('%s:: '\
-          '# ckpts: %d, # failures: %d, '\
-          'compute time: %d, '\
-          'lost work: %d, '\
-          'actual run time: %d' %
-          (p.name, p.numCkpts, p.numFailures, p.totalComputeTime, p.lostWork, p.endTime))
+    print(p)
