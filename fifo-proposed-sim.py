@@ -17,7 +17,7 @@ in the lightest process, which is then runs until completion.
 RANDOM_SEED = 42
 PT_MEAN = 1000.0       # Avg. processing time in minutes
 PT_SIGMA = 100.0       # Sigma of processing time
-MTBF = 100.0           # Mean time to failure in minutes
+MTBF = 50.0           # Mean time to failure in minutes
 BREAK_MEAN = 1 / MTBF  # Param. for expovariate distribution
 NUM_PROCESSES = 7      # Number of processes
 MAX_PARALLEL_PROCESSES = 1
@@ -51,7 +51,8 @@ def time_per_process():
 def time_to_failure():
     """Return time until next failure for a machine."""
     nextFailure = int(random.expovariate(BREAK_MEAN))
-    #nextFailure = int(np.random.weibull(WEIBULL_K)*10.0)
+    # The Weibull distr. is somehow generating too many errors
+    #nextFailure = int(np.random.weibull(WEIBULL_K)*10.0) + MTBF
     return nextFailure
     #return MTBF
 
@@ -363,7 +364,7 @@ class Process(object):
                     assert self.isRestarting == True
                     self.ProcLog("Restart from ckpt #%d, taken at %d" % (self.numCkpts, self.lastCheckpointTime))
                     restartStartTime = self.env.now
-                    yield self.env.timeout(delta)
+                    yield self.env.timeout(int(delta/2.0))
                     # Done with restart without errors
                     self.numRestarts += 1
                     self.ProcLog("Restart successful... going back to compute")
@@ -433,11 +434,11 @@ def main(argc, argv):
     print("******************************************************")
     print("******************FINAL DATA**************************")
     print("******************************************************")
-    print("Process #, # Ckpts, # Total Failures, # Restarts, # Failed Restarts, # Failure During Ckpt, # Preempts,"\
+    print("Process #, # Ckpts, # Total Failures, # Restarts, # Failed Restarts, # Failed Ckpts, # Preempts,"\
           " Compute Time, Ckpt Time, Lost Work, Lost Restart Time, Lost Ckpt Time, Submission Time, Start Time,"\
           " End Time, Actual Run Time")
     for p in testProcesses:
-        t1 =  int((p.numCkpts + p.numRestarts) * p.ckptTime + p.lostWork + p.totalComputeTime + p.lostRestartTime)
+        t1 = int(p.numCkpts * p.ckptTime + p.numRestarts * int(p.ckptTime/2.0) + p.lostWork + p.totalComputeTime + p.lostRestartTime)
         t2 = int(p.actualRunTime)
         if not p.restartFailures * p.ckptTime >= p.lostRestartTime:
           print "Warning"
