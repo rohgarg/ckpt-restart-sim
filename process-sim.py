@@ -179,7 +179,7 @@ class Process(object):
 
 # Setup and start the simulation
 print('Process checkpoint-restart simulator')
-if len(sys.argv) > 0:
+if len(sys.argv) > 1:
     NUM_PROCESSES = int(sys.argv[1])
 
 random.seed(RANDOM_SEED)  # constant seed for reproducibility
