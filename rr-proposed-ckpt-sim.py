@@ -164,6 +164,7 @@ class BatchQueue(object):
                     start = self.env.now
                     queueTime = self.env.now
                     self.BqLog("Starting %s" %(p.name))
+                    p.numCkptsBeforeYield = 1
                     p.process = self.env.process(p.runJob())
                 elif p.isRestarting and not p.isPreempted:
                     start = self.env.now
@@ -175,9 +176,11 @@ class BatchQueue(object):
                     self.BqLog("Waiting for resume for %s to complete" % (p.name))
                     yield p.resumeCompleted
                     self.BqLog("Restarted %s" % (p.name))
+                    p.isPreempted = False
                     start = self.env.now
                 else:
-                    assert False
+                    assert len(self.circQ) == 1
+                    queueTime = self.env.now
                 # Simple FIFO scheduling after a fault
                 self.BqLog("Wait for %s to complete or ckpt" %(p.name))
                 yield p.waitForComputeToEnd | p.waitForCkptToComplete
@@ -188,11 +191,13 @@ class BatchQueue(object):
                     self.circQ.remove(p)
                     idx = idx if len(self.circQ) == 0 else idx % len(self.circQ)
                     continue
-                idx = (idx + 1) % len(self.circQ)
-                self.BqLog("Preempting %s from execution, AT: %d, QT: %d" % (p.name, p.actualRunTime, queueTime))
-                p.isPreempted = True
-                p.numPreempts += 1
-                p.process.interrupt(cause="preemptImmediate")
+                if len(self.circQ) > 1:
+                    # No need to preempt a single process
+                    idx = (idx + 1) % len(self.circQ)
+                    self.BqLog("Preempting %s from execution, AT: %d, QT: %d" % (p.name, p.actualRunTime, queueTime))
+                    p.isPreempted = True
+                    p.numPreempts += 1
+                    p.process.interrupt(cause="preemptImmediate")
                 continue
             except simpy.Interrupt as e:
                 if e.cause == "failure":
@@ -255,6 +260,7 @@ class Process(object):
         self.numRestarts = 0
         self.lostRestartTime = 0
         self.lostCkptTime = 0
+        self.numCkptsBeforeYield = 0
         self.startAfresh = True
 
     def submitToQueue(self):
@@ -270,6 +276,7 @@ class Process(object):
         self.inTheMiddle = False
         self.startTime = self.env.now
         self.startAfresh = False
+        numCkptsInThisSchedule = 0
         while self.workLeft:
             try:
                 delta = self.ckptTime
@@ -280,8 +287,12 @@ class Process(object):
                     self.env.exit()
 
                 # Simulate restart when requested by the bq, only if we have at least 1 ckpt
-                if self.isPreempted and self.numCkpts > 0:
-                   restarting = self.env.process(self.do_restart(0))
+                if self.isPreempted:
+                   if self.numCkpts > 0:
+                       restarting = self.env.process(self.do_restart(0))
+                   else:
+                       restarting = self.env.process(self.do_restart(0, True))
+                   numCkptsInThisSchedule = 0
                    while True:
                        try:
                            self.isRestarting = True
@@ -314,9 +325,12 @@ class Process(object):
                 self.ProcLog("Ckpting, workleft %d" % (self.workLeft))
                 self.inTheMiddle = True
                 ckptingProc = self.env.process(self.do_ckpt())
+
                 yield ckptingProc
-                self.waitForCkptToComplete.succeed()
-                self.waitForCkptToComplete = self.env.event()
+                numCkptsInThisSchedule += 1
+                if self.numCkptsBeforeYield != 0 and numCkptsInThisSchedule == self.numCkptsBeforeYield:
+                  self.waitForCkptToComplete.succeed()
+                  self.waitForCkptToComplete = self.env.event()
                 self.inTheMiddle = False
             except simpy.Interrupt as e:
                 if e.cause == "failure":
@@ -416,7 +430,7 @@ class Process(object):
                     yield self.waitForBq
                     self.waitForBq = self.env.event()
                     self.ProcLog("preemptImmediate: restart mode: resumed")
-                    self.env.exit()
+                    #self.env.exit()
 
     def __str__(self):
         return "%s, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d" %\
