@@ -27,7 +27,7 @@ def HOURS_TO_SECS(x):
     return x*3600.0
 
 RANDOM_SEED = 42
-PT_MEAN = HOURS_TO_SECS(800.0)    # Avg. processing time in hours
+PT_MEAN = HOURS_TO_SECS(1000.0)    # Avg. processing time in hours
 PT_SIGMA = HOURS_TO_SECS(100.0)   # Sigma of processing time
 MTBF = HOURS_TO_SECS(10.0)        # Mean time to failure in hours
 BREAK_MEAN = 1 / MTBF             # Param. for expovariate distribution
@@ -95,9 +95,9 @@ class BatchQueue(object):
         self.monitorDict = {'wd': [], 'lw': [], 'ckpts': [], 'rsts': [], 'failureTimes': []}
         self.savedJobs = []
 
-    def BqLog(self, msg):
+    def BqLog(self, msg, showLogs=False):
         """Logging mechanism for the batchqueue"""
-        if enableBqLogs:
+        if showLogs or enableBqLogs:
             print("[%d][%4d]: BQ(%d): %s" %(self.env.now, currentframe().f_back.f_lineno, len(self.circQ), msg))
 
     def addToBq(self, p):
@@ -538,22 +538,18 @@ def computeResults(args, batchQ):
     tmp2 = batchQ.monitorDict['failureTimes']
     instantenousWd = np.asarray(np.diff(tmp))
     WdOverTime = np.asarray([x/float(y) for (x,y) in zip(tmp, tmp2)])
-    Wd  = np.asarray(tmp)
 
     tmp = batchQ.monitorDict['lw']
     instantenousLw = np.asarray(np.diff(tmp))
     LwOverTime = np.asarray([x/float(i*MONITOR_GAP) for (x,i) in zip(tmp, range(len(tmp))) if i > 0.0])
-    Lw  = np.asarray(tmp)
 
     tmp = batchQ.monitorDict['ckpts']
     instantenousCk = np.asarray(np.diff(tmp))
     CkOverTime = np.asarray([x/float(i*MONITOR_GAP) for (x,i) in zip(tmp, range(len(tmp))) if i > 0.0])
-    Ck  = np.asarray(tmp)
 
     tmp = batchQ.monitorDict['rsts']
     instantenousRsts = np.asarray(np.diff(tmp))
     RstsOverTime = np.asarray([x/float(i*MONITOR_GAP) for (x,i) in zip(tmp, range(len(tmp))) if i > 0.0])
-    Rsts  = np.asarray(tmp)
 
     batchQ.monitorDict['instantenousWd'] = instantenousWd
     batchQ.monitorDict['overTimeWd'] = WdOverTime
@@ -566,7 +562,7 @@ def computeResults(args, batchQ):
 
 def main(argc, argv):
     """Set up and start the simulation."""
-    global NUM_PROCESSES, enableProcLogs, enableBqLogs, HELP, useWeibull
+    global NUM_PROCESSES, enableProcLogs, enableBqLogs, HELP, useWeibull, PT_MEAN
 
     print('Process checkpoint-restart simulator')
     random.seed(RANDOM_SEED)  # constant seed for reproducibility
@@ -574,6 +570,7 @@ def main(argc, argv):
     # Create an environment and start the setup process
     env = simpy.Environment()
     parser = ap.ArgumentParser(description=HELP, formatter_class=ap.RawTextHelpFormatter)
+    parser.add_argument("--run-time", type=int, help="Compute time (in hours) for each job. Default is 1000.")
     parser.add_argument("-p", "--proc_logs", action="store_true", help="Show run time logs from processes")
     parser.add_argument("-b", "--batchqueue_logs", action="store_true", help="Show run time logs from the batch-queue manager")
     parser.add_argument("-n", "--procs", type=int, default=NUM_PROCESSES, help="Max. number of processes to simulate (default: 7)")
@@ -594,6 +591,8 @@ def main(argc, argv):
     enableProcLogs = args.proc_logs
     enableBqLogs = args.batchqueue_logs
     useWeibull = args.use_weibull
+    if args.run_time:
+       PT_MEAN = HOURS_TO_SECS(args.run_time)
 
     # Create a batch queue
     mymachine = simpy.Resource(env, MAX_PARALLEL_PROCESSES)
@@ -632,6 +631,8 @@ def main(argc, argv):
             print("Warning: %d != %d" % (t1, t2))
         print(p)
     print("End Time: %d" % (max(testProcesses, key=lambda p:p.endTime).endTime))
+    print("Total Ckpt Time: %d" % (sum([t.ckptTime * t.numCkpts for t in testProcesses])))
+    print("Total Lost Work: %d" % (sum([t.lostWork for t in testProcesses])))
     if showPlot:
         plt.show()
 
