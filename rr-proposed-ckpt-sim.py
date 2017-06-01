@@ -177,7 +177,9 @@ class BatchQueue(object):
                     start = self.env.now
                     queueTime = self.env.now
                     self.BqLog("Starting %s" %(p.name))
-                    p.numCkptsBeforeYield = numCkptsBeforeYield
+                    oci = int(math.sqrt(2*MTBF*p.ckptTime))
+                    p.numCkptsBeforeYield =  int((MTBF/2.0)/oci) # numCkptsBeforeYield[idx]
+                    print p.numCkptsBeforeYield
                     p.process = self.env.process(p.runJob())
                 elif p.isRestarting and not p.isPreempted:
                     start = self.env.now
