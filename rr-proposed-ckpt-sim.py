@@ -46,7 +46,7 @@ HELP="This simulator implements the following policy.\n\n"\
      "    of the first job in the queue.\n\n"
 
 # Shape parameter for Weibull distr.
-WEIBULL_SHAPE = 0.80
+WEIBULL_SHAPE = 0.60
 WEIBULL_SCALE = MTBF/gamma(1.0+1.0/WEIBULL_SHAPE)
 
 # Failures are injected after a delay of 100
@@ -108,8 +108,8 @@ class BatchQueue(object):
         if len(self.circQ) < self.maxLength - 1:
             self.circQ.append(p)
 
-    def runBq(self, with_preempt, numCkptsBeforeYield):
-        self.process = self.env.process(self.runBqHelper(with_preempt,numCkptsBeforeYield))
+    def runBq(self, with_preempt):
+        self.process = self.env.process(self.runBqHelper(with_preempt))
         start_delayed(self.env, self.inject_failure(), INITIAL_FAILURE_DELAY)
         self.env.process(self.monitorWorkDone())
         self.savedJobs = self.allJobs[:]
@@ -157,7 +157,7 @@ class BatchQueue(object):
                 self.numFailures += 1
                 self.process.interrupt(cause="failure")
 
-    def runBqHelper(self, with_preempt=True, numCkptsBeforeYield=1):
+    def runBqHelper(self, with_preempt=True):
         idx = 0
         while len(self.circQ) > 0:
           with self.machine.request() as req:
@@ -177,8 +177,6 @@ class BatchQueue(object):
                     start = self.env.now
                     queueTime = self.env.now
                     self.BqLog("Starting %s" %(p.name))
-                    oci = int(math.sqrt(2*MTBF*p.ckptTime))
-                    p.numCkptsBeforeYield =  int((MTBF/2.0)/oci) # numCkptsBeforeYield[idx]
                     print p.numCkptsBeforeYield
                     p.process = self.env.process(p.runJob())
                 elif p.isRestarting and not p.isPreempted:
@@ -277,6 +275,7 @@ class Process(object):
         self.lostCkptTime = 0
         self.numCkptsBeforeYield = 0
         self.startAfresh = True
+        self.oci = int(math.sqrt(2*MTBF*self.ckptTime))
 
     def submitToQueue(self):
         self.submissionTime = self.env.now
@@ -294,9 +293,8 @@ class Process(object):
         numCkptsInThisSchedule = 0
         while self.workLeft:
             try:
-                delta = self.ckptTime
-                oci = int(math.sqrt(2*MTBF*delta))
-                computeTime = min(oci, self.workLeft)
+                computeTime = min(self.oci, self.workLeft)
+                self.ProcLog("Will ckpt after %d time" % (self.oci))
                 if computeTime <= 0:
                     self.endTime = self.env.now
                     self.env.exit()
@@ -330,7 +328,7 @@ class Process(object):
 
                 # If the work left was less than oci, and we reach here w/o any interrupt,
                 #    it means we are done
-                if self.workLeft <= oci:
+                if self.workLeft <= self.oci:
                    self.workLeft = 0
                    self.endTime = self.env.now
                    self.waitForComputeToEnd.succeed()
@@ -564,7 +562,8 @@ def computeResults(args, batchQ):
 
 def main(argc, argv):
     """Set up and start the simulation."""
-    global NUM_PROCESSES, enableProcLogs, enableBqLogs, HELP, useWeibull, PT_MEAN
+    global NUM_PROCESSES, enableProcLogs, enableBqLogs, HELP, useWeibull,\
+           PT_MEAN, MTBF, WEIBULL_SHAPE, WEIBULL_SCALE
 
     print('Process checkpoint-restart simulator')
     random.seed(RANDOM_SEED)  # constant seed for reproducibility
@@ -587,6 +586,9 @@ def main(argc, argv):
     parser.add_argument("-r", "--show-restart-results", action="store_true", help="Show restart results using matplotlib.")
     parser.add_argument("--sorted", action="store_true", help="Submit jobs in increasing order of ckpt ovhd.")
     parser.add_argument("--ckpts-before-yield", type=int, help="N, as described above. Default is 1. 0 indicates no yield after a ckpt, i.e., FIFO policy.")
+    parser.add_argument("--mtbf", type=int, help="System MTBF in hours. Default is 10 hrs.")
+    parser.add_argument("--weibull-shape", type=float, help="Weibull shape parameter. Default is 0.6.")
+    parser.add_argument("--oci-scale-factor", type=float, help="Scaling factor for OCI of heavy application. Default is 1.0")
     args = parser.parse_args()
     NUM_PROCESSES = args.procs
     MAX_CIRC_Q_LEN = NUM_PROCESSES + 1
@@ -595,6 +597,12 @@ def main(argc, argv):
     useWeibull = args.use_weibull
     if args.run_time:
        PT_MEAN = HOURS_TO_SECS(args.run_time)
+    if args.weibull_shape:
+       WEIBULL_SHAPE = args.weibull_shape
+       WEIBULL_SCALE = MTBF/gamma(1.0+1.0/WEIBULL_SHAPE)
+    if args.mtbf:
+       MTBF = HOURS_TO_SECS(args.mtbf)
+       WEIBULL_SCALE = MTBF/gamma(1.0+1.0/WEIBULL_SHAPE)
 
     # Create a batch queue
     mymachine = simpy.Resource(env, MAX_PARALLEL_PROCESSES)
@@ -602,13 +610,22 @@ def main(argc, argv):
     showPlot = args.show_throughput_results | args.show_lostwork_results |\
                args.show_ckpt_results | args.show_restart_results
 
-    testProcesses = [Process(env, 'Process %d' % i, random.randint(0,300)*2, mymachine)
+    testProcesses = [Process(env, 'Process %d' % i, 30*60 if i == 0 else 1*60, mymachine)
                      for i in range(NUM_PROCESSES)]
+
+    if args.oci_scale_factor:
+        heavyProc = max(testProcesses, key=lambda p:p.ckptTime)
+        heavyProc.oci *= args.oci_scale_factor
+
+    for p in testProcesses:
+        x = args.ckpts_before_yield if args.ckpts_before_yield else int((MTBF/2.0)/p.oci)
+        p.numCkptsBeforeYield = 1 if x <= 0 else x
+
     if args.sorted:
         testProcesses.sort(key=lambda p:p.ckptTime)
 
     simulateArrivalOfJobs(env, testProcesses, batchQ)
-    env.process(batchQ.runBq(False, args.ckpts_before_yield))
+    env.process(batchQ.runBq(False))
     # Execute
     env.run()
 
