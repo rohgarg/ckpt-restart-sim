@@ -649,6 +649,8 @@ def main(argc, argv):
         if t1 != t2:
             print("Warning: %d != %d" % (t1, t2))
         print(p)
+    print("Total Lost Ckpt Work: %d" % (sum([t.lostCkptTime for t in testProcesses])))
+    print("Total Lost Restart Work: %d" % (sum([t.lostRestartTime for t in testProcesses])))
     print("End Time: %d" % (max(testProcesses, key=lambda p:p.endTime).endTime))
     print("Total Ckpt Time: %d" % (sum([t.ckptTime * t.numCkpts for t in testProcesses])))
     print("Total Lost Work: %d" % (sum([t.lostWork for t in testProcesses])))
