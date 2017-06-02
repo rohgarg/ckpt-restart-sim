@@ -31,8 +31,8 @@ max_par_runs = par/2
 with tqdm(total=RANGE*2) as pbar:
     for i in range(RANGE/(max_par_runs)):
         computeTime = 500
-        cmdSort = "./rr-proposed-ckpt-sim.py -w -n 2 --run-time %d --sort" % (computeTime)
-        cmdNoSort = "./rr-proposed-ckpt-sim.py -w -n 2 --run-time %d" % (computeTime)
+        cmdSort = "./rr-proposed-ckpt-sim.py -w -n 2 --run-time %d --sort --mtbf 4 --oci-scale-factor 2" % (computeTime)
+        cmdNoSort = "./rr-proposed-ckpt-sim.py -w -n 2 --run-time %d --mtbf 4" % (computeTime)
         a = [cmdSort, cmdNoSort]
         arr = []
         for j in range(max_par_runs):
