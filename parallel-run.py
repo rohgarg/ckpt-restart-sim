@@ -34,7 +34,7 @@ p = re.compile('^Process\s[0-9]+,')
 filter_fn = lambda x: filter(lambda l: p.match(l), x.split('\n'))
 
 def prefix_details_fn(run, policy, lst):
-    return map(lambda s: '%d, %s %s\n' % (run, policy, s), lst)
+    return map(lambda s: '%d, %s, %s\n' % (run, policy, s), lst)
 
 with tqdm(total=RANGE*2) as pbar:
     for i in range(RANGE/(max_par_runs)):
