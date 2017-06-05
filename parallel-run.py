@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from multiprocessing import Pool
 import sys
+import re
 
 results = {'computeTime': [],
            'aware-rt': [],
@@ -17,16 +18,23 @@ results = {'computeTime': [],
            'unaware-lrw': [],
            'aware-lw': [],
            'unaware-lw': []}
-RANGE=512
+RANGE=2
 
 def f(cmd):
     return subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
 
 aux = open("aux-results.txt", "w")
+aux.write("Run, Policy, Process #, # Ckpts, # Total Failures, # Restarts, # Failed Restarts, # Failed Ckpts, # Preempts, Compute Time, Ckpt Time, Lost Work, Lost Restart Time, Lost Ckpt Time, Submission Time, Start Time, End Time, Actual Run Time\n")
 
 par = int(sys.argv[1])
 par = 2 if par < 2 else par
 max_par_runs = par/2
+run_num = 1
+p = re.compile('^Process\s[0-9]+,')
+filter_fn = lambda x: filter(lambda l: p.match(l), x.split('\n'))
+
+def prefix_details_fn(run, policy, lst):
+    return map(lambda s: '%d, %s %s\n' % (run, policy, s), lst)
 
 with tqdm(total=RANGE*2) as pbar:
     for i in range(RANGE/(max_par_runs)):
@@ -42,8 +50,8 @@ with tqdm(total=RANGE*2) as pbar:
         pool.close()
         pool.join()
         for j in range(max_par_runs):
-           aux.write("Aware:\n %s" % (res[j*2+0]))
-           aux.write("Unaware:\n %s" % (res[j*2+1]))
+           aux.writelines(prefix_details_fn(run_num, "aware"  , filter_fn(res[j*2+0])))
+           aux.writelines(prefix_details_fn(run_num, "unaware", filter_fn(res[j*2+1])))
            results['computeTime'].append(computeTime)
            results['aware-rt'].append(int(res[j*2+0].split('\n')[-4].split(':')[1]))
            results['unaware-rt'].append(int(res[j*2+1].split('\n')[-4].split(':')[1]))
@@ -55,6 +63,7 @@ with tqdm(total=RANGE*2) as pbar:
            results['unaware-lcw'].append(int(res[j*2+1].split('\n')[-6].split(':')[1]))
            results['aware-lrw'].append(int(res[j*2+0].split('\n')[-5].split(':')[1]))
            results['unaware-lrw'].append(int(res[j*2+1].split('\n')[-5].split(':')[1]))
+           run_num += 1
         pbar.update(par)
 
 aux.close()
