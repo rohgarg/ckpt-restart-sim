@@ -18,12 +18,12 @@ results = {'computeTime': [],
            'unaware-lrw': [],
            'aware-lw': [],
            'unaware-lw': []}
-RANGE=2
+RANGE=512
 
 def f(cmd):
     return subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
 
-aux = open("aux-results.txt", "w")
+aux = open("aux-results.csv", "w")
 aux.write("Run, Policy, Process #, # Ckpts, # Total Failures, # Restarts, # Failed Restarts, # Failed Ckpts, # Preempts, Compute Time, Ckpt Time, Lost Work, Lost Restart Time, Lost Ckpt Time, Submission Time, Start Time, End Time, Actual Run Time\n")
 
 par = int(sys.argv[1])
