@@ -1,2 +1,2 @@
 #!/bin/bash
-./parallel-run-isolated.py 4 0 1 1.0
+./parallel-run-isolated.py $1 0 1 1.0
