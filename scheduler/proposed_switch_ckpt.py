@@ -68,6 +68,12 @@ gvStartTime = time.time()        # The start time of the most recent run (after 
 
 gvStatsLock = threading.Lock()   # The lock is used when the runtime statistics are being calculated
 
+DMTCP_PATH = "../dmtcp"
+DMTCP_BIN = DMTCP_PATH + "/bin"
+DMTCP_LAUNCH = DMTCP_BIN + "/dmtcp_launch"
+DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
+DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
+
 # Functions #
 
 # DESCRIPTION:
@@ -168,7 +174,7 @@ def runApplication():
 
 	# If there are no checkpoint files, then start afresh
 	if (len(ckptFiles) == 0):
-		string = '../dmtcp/bin/dmtcp_launch '
+		string = DMTCP_LAUNCH + " "
 		# Set the ckeckpointing interval
 		string += '-i ' + str(CKPT_INTERVAL[gvCurrentApp]) + ' '
 		# If the LW app is being started, set the --exit-after-ckpt option
@@ -189,7 +195,7 @@ def runApplication():
 					ckptFile = fle
 					break
 
-		string = '../dmtcp/bin/dmtcp_restart '
+		string = DMTCP_RESTART + " "
 		# Set the ckeckpointing interval
 		string += '-i ' + str(CKPT_INTERVAL[gvCurrentApp]) + ' '
 		# If the LW app is being started, set the --exit-after-ckpt option
@@ -237,7 +243,7 @@ def waitTillFailure(proc):
 
 	# Kill the process if failure is the reason for quitting the loop
 	if switch is False:
-		subprocess.call('../dmtcp/bin/dmtcp_command --kill', shell=True)
+		subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
 
 	# Acquire the lock on calculate stats
 	gvStatsLock.acquire()
@@ -305,6 +311,18 @@ def waitTillEOE():
 	# Release the lock on calculate stats
 	gvStatsLock.release()
 
+def verifyDmtcpPaths():
+
+  global DMTCP_PATH, DMTCP_BIN, DMTCP_LAUNCH, DMTCP_RESTART, DMTCP_COMMAND
+
+  if not (os.path.isdir(DMTCP_PATH) and os.path.isdir(DMTCP_BIN) and \
+          os.path.isfile(DMTCP_LAUNCH) and os.path.isfile(DMTCP_RESTART) and \
+          os.path.isfile(DMTCP_COMMAND)):
+     print("Please specify a valid path to the DMTCP root directory.\n" \
+           "Also, make sure to run configure and build within the DMTCP directory.\n")
+     exit(-1)
+
+
 # DESCRIPTION:
 # > Main function parses arguments and starts the threads
 # INPUTS:
@@ -316,6 +334,7 @@ def main():
 	global TOTAL_TIME
 	global MTBF, WEIBULL_SHAPE, WEIBULL_SCALE
 	global CKPT_INTERVAL, NUM_CKPTS_LW, APP_NAME
+	global DMTCP_PATH, DMTCP_BIN, DMTCP_LAUNCH, DMTCP_RESTART, DMTCP_COMMAND
 
 	# Parse the arguments and set the global constants
 	parser = argparse.ArgumentParser(prog="swtch_ckpt_run", description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
@@ -328,6 +347,7 @@ def main():
 	parser.add_argument("-i", "--ckpt-int-lw", type=float, help="The checkpointing interval of the low weight application. Default = 1 hour.")
 	parser.add_argument("-n", "--ckpt-int-hw", type=float, help="The checkpointing interval of the high weight application. Default = 5 hours.")
 	parser.add_argument("-w","--weibull-shape", type=float, help="The shape parameter of the Weibull failure curve. Default = 0.6.")
+	parser.add_argument("-d","--dmtcp-path", type=str, help="The path to the DMTCP root directory. Default = ../dmtcp")
 	
 	args = parser.parse_args()
 
@@ -347,6 +367,13 @@ def main():
 		CKPT_INTERVAL[1] = int(HOURS_TO_SECS(args.ckpt_int_hw/SCALE_FACTOR))
 	if args.weibull_shape:
 		WEIBULL_SHAPE = args.weibull_shape
+	if args.dmtcp_path:
+		DMTCP_PATH = args.dmtcp_path
+                DMTCP_BIN = DMTCP_PATH + "/bin"
+                DMTCP_LAUNCH = DMTCP_BIN + "/dmtcp_launch"
+                DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
+                DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
+                verifyDmtcpPaths()
 
 	WEIBULL_SCALE = MTBF/gamma(1+(1/WEIBULL_SHAPE))
 
