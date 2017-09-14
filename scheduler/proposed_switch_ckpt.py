@@ -305,7 +305,7 @@ def waitTillEOE():
 	gvStatsLock.acquire()
 
 	timeDiff = time.time() - gvStartTime
-	subprocess.call('../dmtcp/bin/dmtcp_command --kill', shell=True)
+	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
 	calculateStats(timeDiff)
 
 	# Release the lock on calculate stats
