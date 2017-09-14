@@ -243,7 +243,9 @@ def waitTillFailure(proc):
 
 	# Kill the process if failure is the reason for quitting the loop
 	if switch is False:
-		subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
+		# --kill may block while the application is ckpting
+		#subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
+		proc.send_signal(9);
 
 	# Acquire the lock on calculate stats
 	gvStatsLock.acquire()
