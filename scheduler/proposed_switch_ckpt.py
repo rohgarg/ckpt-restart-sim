@@ -311,6 +311,14 @@ def waitTillEOE():
 	# Release the lock on calculate stats
 	gvStatsLock.release()
 
+# DESCRIPTION:
+# > This function verifies that the path specified for the
+# > DMTCP root directory is a valid path, and that the binaries
+# > are present.
+# INPUTS:
+# > None
+# OUTPUTS:
+# > None
 def verifyDmtcpPaths():
 
   global DMTCP_PATH, DMTCP_BIN, DMTCP_LAUNCH, DMTCP_RESTART, DMTCP_COMMAND
@@ -386,7 +394,7 @@ def main():
 		subprocess.call('rm dmtcp_restart_script*.sh', shell=True)
 
 	# Kill any exisiting dmtcp processes
-	subprocess.call('../dmtcp/bin/dmtcp_command --kill', shell=True)
+	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
 
 	# Start the SAThread which runs the scheduleApps() function
 	SAThread = threading.Thread(target=scheduleApps, args=())
