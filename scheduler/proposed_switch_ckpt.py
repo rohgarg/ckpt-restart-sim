@@ -4,7 +4,7 @@
 
 import sys, argparse
 import shlex, glob
-import os, subprocess, threading
+import os, subprocess, threading, shutil
 import time, math, random
 from scipy.special import gamma
 
@@ -50,6 +50,8 @@ APP_NAME_OUT = ['app.out']*2
 APP_NAME_OUT[0] = 'app1.out'                            # Output file for app 1
 APP_NAME_OUT[1] = 'app2.out'                            # Output file for app 2
 
+APP_CKPT_DIR = ['app']*2
+
 # Global Variables #
 
 gvTotalCO = [0]*2                # Total checkpointing overhead of app 1 and 2
@@ -68,6 +70,7 @@ gvStartTime = time.time()        # The start time of the most recent run (after 
 
 gvStatsLock = threading.Lock()   # The lock is used when the runtime statistics are being calculated
 
+GLOBAL_CKPT_DIR = "./ckpt-dir"
 DMTCP_PATH = "../dmtcp"
 DMTCP_BIN = DMTCP_PATH + "/bin"
 DMTCP_LAUNCH = DMTCP_BIN + "/dmtcp_launch"
@@ -165,9 +168,10 @@ def calculateStats(timeDiff):
 def runApplication():
 
 	global gvCurrentApp, gvStartTime
+	global APP_NAME, APP_CKPT_DIR
 
 	# List of current app's checkpoint files
-	ckptFiles = glob.glob('ckpt_'+APP_NAME[gvCurrentApp]+'_*.dmtcp')
+	ckptFiles = glob.glob(APP_CKPT_DIR[gvCurrentApp] + '/' + 'ckpt_'+APP_NAME[gvCurrentApp]+'_*.dmtcp')
 
 	# Launch the currently set application
 	string = ''
@@ -181,6 +185,7 @@ def runApplication():
 		if (gvCurrentApp == 0):
 			string += '--exit-after-ckpt ' + str(NUM_CKPTS_LW) + ' '
 		string += APP_NAME[gvCurrentApp]
+		string += '--ckptdir ' + APP_CKPT_DIR[gvCurrentApp] + ' '
 		#string += '>> ' + APP_NAME_OUT[gvCurrentApp] +' &'
 	else:
 		ckptFile = ckptFiles[0]
@@ -202,6 +207,7 @@ def runApplication():
 		if (gvCurrentApp == 0):
 			string += '--exit-after-ckpt ' + str(NUM_CKPTS_LW) + ' '
 		string += ckptFile
+		string += '--ckptdir ' + APP_CKPT_DIR[gvCurrentApp] + ' '
 		#string += '>> ' + APP_NAME_OUT[gvCurrentApp] +' &'
 
 	# Set the new start time of the run
@@ -333,6 +339,19 @@ def verifyDmtcpPaths():
      exit(-1)
 
 
+def prepareCkptDirs():
+  global GLOBAL_CKPT_DIR, APP_NAME, APP_CKPT_DIR
+  try:
+    if os.path.exists(GLOBAL_CKPT_DIR):
+      shutil.rmtree(GLOBAL_CKPT_DIR, ignore_errors=True)
+    os.makedirs(GLOBAL_CKPT_DIR)
+    for i in range(len(APP_NAME)):
+      APP_CKPT_DIR[i] = GLOBAL_CKPT_DIR + "/" + os.path.basename(APP_NAME[i])
+      os.makedirs(APP_CKPT_DIR[i])
+  except OSError as e:
+    if e.errno != errno.EEXIST:
+      raise
+
 # DESCRIPTION:
 # > Main function parses arguments and starts the threads
 # INPUTS:
@@ -388,8 +407,7 @@ def main():
 	WEIBULL_SCALE = MTBF/gamma(1+(1/WEIBULL_SHAPE))
 
 	# Remove any existing checkpoint data files
-	if (len(glob.glob('ckpt_*.dmtcp')) != 0):
-		subprocess.call('rm ckpt_*.dmtcp', shell=True)
+	prepareCkptDirs()
 	
 	# Remove any existing checkpoint restart files
 	if (len(glob.glob('dmtcp_restart_script*.sh')) != 0):
