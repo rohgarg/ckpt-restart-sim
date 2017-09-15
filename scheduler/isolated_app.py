@@ -26,7 +26,7 @@ Local Variables     :- Small letters except first letter of a word
 
 # Global constants #
 
-DESCRIPTION = "The program runs two application using the switch checkpointing method.\n"
+DESCRIPTION = "The program runs an application with DMTCP checkpointing and simulated failures.\n"
 
 SCALE_FACTOR = 1800                                     # The factor which the times should be scaled down by
                                                         # Current value scales 100 hours to 200 seconds
@@ -37,16 +37,12 @@ MTBF = HOURS_TO_SECS(10/SCALE_FACTOR)                   # Mean time between fail
 WEIBULL_SHAPE = 0.6                                     # Shape parameter for failure calculation
 WEIBULL_SCALE = MTBF/gamma(1+(1/WEIBULL_SHAPE))         # Scale parameter for failure calculation
 
-CKPT_INTERVAL = [0]*2
-CKPT_INTERVAL[0] = int(HOURS_TO_SECS(1/SCALE_FACTOR))   # Checkpointing interval (or compute time per interval) for app 1
-CKPT_INTERVAL[1] = int(HOURS_TO_SECS(5/SCALE_FACTOR))   # Checkpointing interval (or compute time per interval) for app 2
-NUM_CKPTS_LW = 2                                        # Number of checkpoints after which app 1 should switch
+CKPT_INTERVAL = int(HOURS_TO_SECS(5/SCALE_FACTOR))      # Checkpointing interval (or compute time per interval)
 
-APP_NAME = ['app']*2
-APP_NAME[0] = '../dmtcp/test/dmtcp1'                    # Name of app 1
-APP_NAME[1] = '../dmtcp/test/dmtcp2'                    # Name of app 2
+APP_NAME = '../dmtcp/test/dmtcp1'                       # Name of the app
 
-APP_CKPT_DIR = ['app']*2
+# Parameter for checkpoint and DMTCP paths and dirs
+APP_CKPT_DIR = 'app'
 
 GLOBAL_CKPT_DIR = "./ckpt-dir"
 DMTCP_PATH = "../../dmtcp"
@@ -57,15 +53,13 @@ DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
 
 # Global Variables #
 
-gvTotalCO = [0]*2                # Total checkpointing overhead of app 1 and 2
-gvTotalUW = [0]*2                # Total useful work done by app 1 and 2
-gvTotalLW = [0]*2                # Total lost work of app 1 and 2
-gvTotalRT = [0]*2                # Total run time of app 1 and 2
-gvTotalCP = [0]*2                # Total number of checkpoints during app 1 and 2
+gvTotalCO = 0                    # Total checkpointing overhead of the app 
+gvTotalUW = 0                    # Total useful work done by the app 
+gvTotalLW = 0                    # Total lost work of the app 
+gvTotalRT = 0                    # Total run time of the app
+gvTotalCP = 0                    # Total number of checkpoints during the app
 
 gvTotalFL = 0                    # Total number of system failures
-
-gvCurrentApp = 0                 # The ID of the currently running app
 
 gvDone = False                   # Signals the end of the run
 
@@ -87,31 +81,18 @@ def printStats():
 	global gvTotalCO, gvTotalUW, gvTotalLW, gvTotalRT, gvTotalCP
 
 	# Scale back the values in seconds to hours
-	TotalCO = [(SECS_TO_HOURS(gvTotalCO[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalCO[1])*SCALE_FACTOR)]
-	TotalUW = [(SECS_TO_HOURS(gvTotalUW[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalUW[1])*SCALE_FACTOR)]
-	TotalLW = [(SECS_TO_HOURS(gvTotalLW[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalLW[1])*SCALE_FACTOR)]
-	TotalRT = [(SECS_TO_HOURS(gvTotalRT[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalRT[1])*SCALE_FACTOR)]
+	TotalCO = SECS_TO_HOURS(gvTotalCO)*SCALE_FACTOR
+	TotalUW = SECS_TO_HOURS(gvTotalUW)*SCALE_FACTOR
+	TotalLW = SECS_TO_HOURS(gvTotalLW)*SCALE_FACTOR
+	TotalRT = SECS_TO_HOURS(gvTotalRT)*SCALE_FACTOR
 
 	string  = "\n"
-	string += "Process Name         = " + APP_NAME[0] + "\n"
-	string += "Checkpoint Time      = " + str("%.2f" % TotalCO[0]) + "h\n"
-	string += "Useful Work          = " + str("%.2f" % TotalUW[0]) + "h\n"
-	string += "Lost Work            = " + str("%.2f" % TotalLW[0]) + "h\n"
-	string += "Run Time             = " + str("%.2f" % TotalRT[0]) + "h\n"
-	string += "Num Checkpoints      = " + str(gvTotalCP[0]) + "\n"
-	string += "\n"
-	string += "Process Name         = " + APP_NAME[1] + "\n"
-	string += "Checkpoint Time      = " + str("%.2f" % TotalCO[1]) + "h\n"
-	string += "Useful Work          = " + str("%.2f" % TotalUW[1]) + "h\n"
-	string += "Lost Work            = " + str("%.2f" % TotalLW[1]) + "h\n"
-	string += "Run Time             = " + str("%.2f" % TotalRT[1]) + "h\n"
-	string += "Num Checkpoints      = " + str(gvTotalCP[1]) + "\n"
-	string += "\n"
-	string += "Total runtime statistics:\n"
-	string += "Checkpoint Time      = " + str("%.2f" % (TotalCO[0]+TotalCO[1])) + "h\n"
-	string += "Useful Work          = " + str("%.2f" % (TotalUW[0]+TotalUW[1])) + "h\n"
-	string += "Lost Work            = " + str("%.2f" % (TotalLW[0]+TotalLW[1])) + "h\n"
-	string += "Run Time             = " + str("%.2f" % (TotalRT[0]+TotalRT[1])) + "h\n"
+	string += "Process Name         = " + APP_NAME + "\n"
+	string += "Checkpoint Time      = " + str("%.2f" % TotalCO) + "h\n"
+	string += "Useful Work          = " + str("%.2f" % TotalUW) + "h\n"
+	string += "Lost Work            = " + str("%.2f" % TotalLW) + "h\n"
+	string += "Run Time             = " + str("%.2f" % TotalRT) + "h\n"
+	string += "Num Checkpoints      = " + str(gvTotalCP) + "\n"
 	string += "Num Failures         = " + str(gvTotalFL) + "\n"
 
 	print(string)
@@ -125,7 +106,6 @@ def printStats():
 # > None
 def calculateStats(timeDiff):
 
-	global gvCurrentApp
 	global gvTotalCO, gvTotalUW, gvTotalLW, gvTotalRT, gvTotalCP
 
 	locCP = 0   # Number of checkpoints during this interval
@@ -150,11 +130,11 @@ def calculateStats(timeDiff):
 
 	# Useful Work is [checkpoint interval * number of checkpoints]
 	# Lost Work is [runtime - (checkpoint overhead + useful work)]
-	gvTotalCO[gvCurrentApp] += locCO
-	gvTotalUW[gvCurrentApp] += float(CKPT_INTERVAL[gvCurrentApp])*locCP
-	gvTotalLW[gvCurrentApp] += timeDiff-(locCO+(CKPT_INTERVAL[gvCurrentApp]*locCP))
-	gvTotalRT[gvCurrentApp] += timeDiff
-	gvTotalCP[gvCurrentApp] += locCP
+	gvTotalCO += locCO
+	gvTotalUW += float(CKPT_INTERVAL)*locCP
+	gvTotalLW += timeDiff-(locCO+(CKPT_INTERVAL*locCP))
+	gvTotalRT += timeDiff
+	gvTotalCP += locCP
 
 # DESCRIPTION:
 # > This function starts/restarts DMTCP with the desired app
@@ -164,25 +144,21 @@ def calculateStats(timeDiff):
 # > proc: the ID of the launched DMTCP process (needed to know when the process dies)
 def runApplication():
 
-	global gvCurrentApp, gvStartTime
-	global APP_NAME, APP_CKPT_DIR
+	global gvStartTime
 
-	# List of current app's checkpoint files
-	ckptFiles = glob.glob(APP_CKPT_DIR[gvCurrentApp] + '/' + 'ckpt_*.dmtcp')
+	# List of app's checkpoint files
+	ckptFiles = glob.glob(APP_CKPT_DIR + '/' + 'ckpt_*.dmtcp')
 	
-	# Launch the currently set application
+	# Launch the application
 	string = ''
 
 	# If there are no checkpoint files, then start afresh
 	if (len(ckptFiles) == 0):
 		string = DMTCP_LAUNCH + " "
 		# Set the ckeckpointing interval
-		string += '-i ' + str(CKPT_INTERVAL[gvCurrentApp]) + ' '
-		# If the LW app is being started, set the --exit-after-ckpt option
-		if (gvCurrentApp == 0):
-			string += '--exit-after-ckpt ' + str(NUM_CKPTS_LW) + ' '
-		string += '--ckptdir ' + APP_CKPT_DIR[gvCurrentApp] + ' '
-		string += APP_NAME[gvCurrentApp]
+		string += '-i ' + str(CKPT_INTERVAL) + ' '
+		string += '--ckptdir ' + APP_CKPT_DIR + ' '
+		string += APP_NAME
 	else:
 		ckptFile = ckptFiles[0]
 		# If there are multiple checkpoint files, get the newest one
@@ -198,11 +174,8 @@ def runApplication():
 
 		string = DMTCP_RESTART + " "
 		# Set the ckeckpointing interval
-		string += '-i ' + str(CKPT_INTERVAL[gvCurrentApp]) + ' '
-		# If the LW app is being started, set the --exit-after-ckpt option
-		if (gvCurrentApp == 0):
-			string += '--exit-after-ckpt ' + str(NUM_CKPTS_LW) + ' '
-		string += '--ckptdir ' + APP_CKPT_DIR[gvCurrentApp] + ' '
+		string += '-i ' + str(CKPT_INTERVAL) + ' '
+		string += '--ckptdir ' + APP_CKPT_DIR + ' '
 		string += ckptFile
 
 	# Set the new start time of the run
@@ -221,51 +194,25 @@ def runApplication():
 # > None
 def waitTillFailure(proc):
 
-	global gvStartTime, gvDone, gvStatsLock, gvCurrentApp, gvTotalFL
+	global gvStartTime, gvDone, gvStatsLock, gvTotalFL
 
 	# Calculate when the next failure should take place
 	nextFailure = int(random.weibullvariate(WEIBULL_SCALE, WEIBULL_SHAPE))
 
-	# Holds the reason for exisitng the while loop below
-	switch = False
-
-	# Loop until its time to inject a failure
-	while ((time.time() - gvStartTime) <= nextFailure):
-		# Every iteration, poll the currently running DMTCP process
-		# to learn if it has died. If it has, that means it is time
-		# to switch to the HW app.
-		if (proc.poll() is not None):
-			# Set the reason for quitting the loop as switch and break
-			switch = True
-			break
+	time.sleep(nextFailure)
 
 	# Caluclate the time which the app ran for during this instance
 	timeDiff = time.time() - gvStartTime
 
-	# Kill the process if failure is the reason for quitting the loop
-	if switch is False:
-		# --kill may block while the application is ckpting
-		#subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
-		proc.send_signal(9);
+	proc.send_signal(9);
 
 	# Acquire the lock on calculate stats
 	gvStatsLock.acquire()
 
 	# No need to calculate if the entire run has already ended
 	if (gvDone is False):
-
 		calculateStats(timeDiff)
-
-		# If switching, move on to the HW app
-		# Else had a failure, so run the LW app
-		# And increment the number of failures
-		if switch:
-			gvCurrentApp = 1
-		else:
-			gvCurrentApp = 0
-			gvTotalFL += 1
-
-		gvStartTime = time.time()
+		gvTotalFL += 1
 
 	# Release the lock on calculate stats
 	gvStatsLock.release()
@@ -299,7 +246,7 @@ def waitTillEOE():
 	global gvStartTime, gvDone, gvStatsLock
 
 	# Sleep for the duration of the run
-	time.sleep(TOTAL_TIME)
+	time.sleep(TOTAL_TIME)	
 	
 	# Set the gvDone signal to alert the scheduleApps() function to quit
 	gvDone = True
@@ -324,28 +271,32 @@ def waitTillEOE():
 # > None
 def verifyDmtcpPaths():
 
-  global DMTCP_PATH, DMTCP_BIN, DMTCP_LAUNCH, DMTCP_RESTART, DMTCP_COMMAND
-
-  if not (os.path.isdir(DMTCP_PATH) and os.path.isdir(DMTCP_BIN) and \
-          os.path.isfile(DMTCP_LAUNCH) and os.path.isfile(DMTCP_RESTART) and \
-          os.path.isfile(DMTCP_COMMAND)):
-     print("Please specify a valid path to the DMTCP root directory.\n" \
-           "Also, make sure to run configure and build within the DMTCP directory.\n")
-     exit(-1)
+	if not (os.path.isdir(DMTCP_PATH) and os.path.isdir(DMTCP_BIN) and \
+		os.path.isfile(DMTCP_LAUNCH) and os.path.isfile(DMTCP_RESTART) and \
+		os.path.isfile(DMTCP_COMMAND)):
+			print("Please specify a valid path to the DMTCP root directory.\n" \
+			"Also, make sure to run configure and build within the DMTCP directory.\n")
+			exit(-1)
 
 
+# DESCRIPTION:
+# > This function verifies removes any old ckeckpoint dir
+# > and creates a new one.
+# INPUTS:
+# > None
+# OUTPUTS:
+# > None
 def prepareCkptDirs():
-  global GLOBAL_CKPT_DIR, APP_NAME, APP_CKPT_DIR
-  try:
-    if os.path.exists(GLOBAL_CKPT_DIR):
-      shutil.rmtree(GLOBAL_CKPT_DIR, ignore_errors=True)
-    os.makedirs(GLOBAL_CKPT_DIR)
-    for i in range(len(APP_NAME)):
-      APP_CKPT_DIR[i] = GLOBAL_CKPT_DIR + "/" + os.path.basename(APP_NAME[i])
-      os.makedirs(APP_CKPT_DIR[i])
-  except OSError as e:
-    if e.errno != errno.EEXIST:
-      raise
+  
+	try:
+		if os.path.exists(GLOBAL_CKPT_DIR):
+			shutil.rmtree(GLOBAL_CKPT_DIR, ignore_errors=True)
+		os.makedirs(GLOBAL_CKPT_DIR)
+		APP_CKPT_DIR = GLOBAL_CKPT_DIR + "/" + os.path.basename(APP_NAME)
+		os.makedirs(APP_CKPT_DIR)
+	except OSError as e:
+		if e.errno != errno.EEXIST:
+			raise
 
 # DESCRIPTION:
 # > Main function parses arguments and starts the threads
@@ -357,38 +308,29 @@ def main():
 
 	global TOTAL_TIME
 	global MTBF, WEIBULL_SHAPE, WEIBULL_SCALE
-	global CKPT_INTERVAL, NUM_CKPTS_LW, APP_NAME
+	global CKPT_INTERVAL, APP_NAME
 	global DMTCP_PATH, DMTCP_BIN, DMTCP_LAUNCH, DMTCP_RESTART, DMTCP_COMMAND
 
 	# Parse the arguments and set the global constants
-	parser = argparse.ArgumentParser(prog="swtch_ckpt_run", description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
+	parser = argparse.ArgumentParser(prog="isolated_run", description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
 
-	parser.add_argument("-l", "--name-lw", type=str, help="The name of the low weight application.")
-	parser.add_argument("-g", "--name-hw", type=str, help="The name of the high weight application.")
+	parser.add_argument("-d", "--dmtcp-path", type=str, help="The path to the DMTCP root directory. Default = ../../dmtcp")
+	parser.add_argument("-n", "--app-name", type=str, help="The name of the low weight application.")
 	parser.add_argument("-t", "--run-time", type=float, help="The total run time of the program in hours. Default = 100 hours.")
 	parser.add_argument("-m", "--mtbf", type=float, help="The MTBF of the system. Default = 10 hours.")
-	parser.add_argument("-c", "--ckpts-lw", type=int, help="The number of checkpoints after which the low weight applications should switch. Default = 2.")
-	parser.add_argument("-i", "--ckpt-int-lw", type=float, help="The checkpointing interval of the low weight application. Default = 1 hour.")
-	parser.add_argument("-n", "--ckpt-int-hw", type=float, help="The checkpointing interval of the high weight application. Default = 5 hours.")
+	parser.add_argument("-i", "--ckpt-int", type=float, help="The checkpointing interval of the low weight application. Default = 1 hour.")
 	parser.add_argument("-w", "--weibull-shape", type=float, help="The shape parameter of the Weibull failure curve. Default = 0.6.")
-	parser.add_argument("-d", "--dmtcp-path", type=str, help="The path to the DMTCP root directory. Default = ../../dmtcp")
 	
 	args = parser.parse_args()
 
-	if args.name_lw:
-		APP_NAME[0] = args.name_lw
-	if args.name_hw:
-		APP_NAME[1] = args.name_hw
+	if args.app_name:
+		APP_NAME = args.app_name
 	if args.run_time:
 		TOTAL_TIME = HOURS_TO_SECS(args.run_time/SCALE_FACTOR)
 	if args.mtbf:
 		MTBF = HOURS_TO_SECS(args.mtbf/SCALE_FACTOR)
-	if args.ckpts_lw:
-		NUM_CKPTS_LW = args.ckpts_lw
-	if args.ckpt_int_lw:
-		CKPT_INTERVAL[0] = int(HOURS_TO_SECS(args.ckpt_int_lw/SCALE_FACTOR))
-	if args.ckpt_int_hw:
-		CKPT_INTERVAL[1] = int(HOURS_TO_SECS(args.ckpt_int_hw/SCALE_FACTOR))
+	if args.ckpt_int:
+		CKPT_INTERVAL = int(HOURS_TO_SECS(args.ckpt_int/SCALE_FACTOR))
 	if args.weibull_shape:
 		WEIBULL_SHAPE = args.weibull_shape
 		WEIBULL_SCALE = MTBF/gamma(1+(1/WEIBULL_SHAPE))
