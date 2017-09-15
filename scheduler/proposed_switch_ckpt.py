@@ -46,11 +46,14 @@ APP_NAME = ['app']*2
 APP_NAME[0] = '../dmtcp/test/dmtcp1'                    # Name of app 1
 APP_NAME[1] = '../dmtcp/test/dmtcp2'                    # Name of app 2
 
-APP_NAME_OUT = ['app.out']*2
-APP_NAME_OUT[0] = 'app1.out'                            # Output file for app 1
-APP_NAME_OUT[1] = 'app2.out'                            # Output file for app 2
-
 APP_CKPT_DIR = ['app']*2
+
+GLOBAL_CKPT_DIR = "./ckpt-dir"
+DMTCP_PATH = "../../dmtcp"
+DMTCP_BIN = DMTCP_PATH + "/bin"
+DMTCP_LAUNCH = DMTCP_BIN + "/dmtcp_launch"
+DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
+DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
 
 # Global Variables #
 
@@ -69,13 +72,6 @@ gvDone = False                   # Signals the end of the run
 gvStartTime = time.time()        # The start time of the most recent run (after a failure)
 
 gvStatsLock = threading.Lock()   # The lock is used when the runtime statistics are being calculated
-
-GLOBAL_CKPT_DIR = "./ckpt-dir"
-DMTCP_PATH = "../dmtcp"
-DMTCP_BIN = DMTCP_PATH + "/bin"
-DMTCP_LAUNCH = DMTCP_BIN + "/dmtcp_launch"
-DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
-DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
 
 # Functions #
 
@@ -144,9 +140,10 @@ def calculateStats(timeDiff):
 		# For each checkpoint, add the checkpoint time to the overhead
 		# And add 1 to the number of checkpoints
 		for line in content:
-			splits = line.split(',')
-			locCO += float(splits[3])
-			locCP += 1
+			if "checkpoint" in line:
+				splits = line.split(',')
+				locCO += float(splits[3])
+				locCP += 1
 	
 		# Remove the checkpoint timings log
 		subprocess.call('rm jtimings.csv', shell=True)
@@ -171,8 +168,8 @@ def runApplication():
 	global APP_NAME, APP_CKPT_DIR
 
 	# List of current app's checkpoint files
-	ckptFiles = glob.glob(APP_CKPT_DIR[gvCurrentApp] + '/' + 'ckpt_'+APP_NAME[gvCurrentApp]+'_*.dmtcp')
-
+	ckptFiles = glob.glob(APP_CKPT_DIR[gvCurrentApp] + '/' + 'ckpt_*.dmtcp')
+	
 	# Launch the currently set application
 	string = ''
 
@@ -184,9 +181,8 @@ def runApplication():
 		# If the LW app is being started, set the --exit-after-ckpt option
 		if (gvCurrentApp == 0):
 			string += '--exit-after-ckpt ' + str(NUM_CKPTS_LW) + ' '
-		string += APP_NAME[gvCurrentApp]
 		string += '--ckptdir ' + APP_CKPT_DIR[gvCurrentApp] + ' '
-		#string += '>> ' + APP_NAME_OUT[gvCurrentApp] +' &'
+		string += APP_NAME[gvCurrentApp]
 	else:
 		ckptFile = ckptFiles[0]
 		# If there are multiple checkpoint files, get the newest one
@@ -206,9 +202,8 @@ def runApplication():
 		# If the LW app is being started, set the --exit-after-ckpt option
 		if (gvCurrentApp == 0):
 			string += '--exit-after-ckpt ' + str(NUM_CKPTS_LW) + ' '
-		string += ckptFile
 		string += '--ckptdir ' + APP_CKPT_DIR[gvCurrentApp] + ' '
-		#string += '>> ' + APP_NAME_OUT[gvCurrentApp] +' &'
+		string += ckptFile
 
 	# Set the new start time of the run
 	gvStartTime = time.time()
@@ -396,6 +391,7 @@ def main():
 		CKPT_INTERVAL[1] = int(HOURS_TO_SECS(args.ckpt_int_hw/SCALE_FACTOR))
 	if args.weibull_shape:
 		WEIBULL_SHAPE = args.weibull_shape
+		WEIBULL_SCALE = MTBF/gamma(1+(1/WEIBULL_SHAPE))
 	if args.dmtcp_path:
 		DMTCP_PATH = args.dmtcp_path
                 DMTCP_BIN = DMTCP_PATH + "/bin"
@@ -404,7 +400,6 @@ def main():
                 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
                 verifyDmtcpPaths()
 
-	WEIBULL_SCALE = MTBF/gamma(1+(1/WEIBULL_SHAPE))
 
 	# Remove any existing checkpoint data files
 	prepareCkptDirs()
