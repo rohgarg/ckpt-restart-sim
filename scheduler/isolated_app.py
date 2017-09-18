@@ -325,6 +325,8 @@ def main():
 
 	args = parser.parse_args()
 
+	if args.scale_factor:
+		SCALE_FACTOR = args.scale_factor
 	if args.app_name:
 		APP_NAME = args.app_name
 	if args.run_time:
@@ -343,8 +345,6 @@ def main():
                 DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
                 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
                 verifyDmtcpPaths()
-	if args.scale_factor:
-		SCALE_FACTOR = args.scale_factor
 
 	# Remove any existing checkpoint data files
 	prepareCkptDirs()
