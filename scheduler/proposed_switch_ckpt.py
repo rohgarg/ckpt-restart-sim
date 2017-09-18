@@ -359,10 +359,12 @@ def main():
 	global MTBF, WEIBULL_SHAPE, WEIBULL_SCALE
 	global CKPT_INTERVAL, NUM_CKPTS_LW, APP_NAME
 	global DMTCP_PATH, DMTCP_BIN, DMTCP_LAUNCH, DMTCP_RESTART, DMTCP_COMMAND
+	global SCALE_FACTOR
 
 	# Parse the arguments and set the global constants
 	parser = argparse.ArgumentParser(prog="swtch_ckpt_run", description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
 
+	parser.add_argument("-d", "--dmtcp-path", type=str, help="The path to the DMTCP root directory. Default = ../../dmtcp")
 	parser.add_argument("-l", "--name-lw", type=str, help="The name of the low weight application.")
 	parser.add_argument("-g", "--name-hw", type=str, help="The name of the high weight application.")
 	parser.add_argument("-t", "--run-time", type=float, help="The total run time of the program in hours. Default = 100 hours.")
@@ -371,7 +373,7 @@ def main():
 	parser.add_argument("-i", "--ckpt-int-lw", type=float, help="The checkpointing interval of the low weight application. Default = 1 hour.")
 	parser.add_argument("-n", "--ckpt-int-hw", type=float, help="The checkpointing interval of the high weight application. Default = 5 hours.")
 	parser.add_argument("-w", "--weibull-shape", type=float, help="The shape parameter of the Weibull failure curve. Default = 0.6.")
-	parser.add_argument("-d", "--dmtcp-path", type=str, help="The path to the DMTCP root directory. Default = ../../dmtcp")
+	parser.add_argument("-s", "--scale-factor", type=float, help="The paramter to scale hours to seconds. Default = 1800.")
 	
 	args = parser.parse_args()
 
@@ -399,6 +401,8 @@ def main():
                 DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
                 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
                 verifyDmtcpPaths()
+	if args.scale_factor:
+		SCALE_FACTOR = args.scale_factor
 
 
 	# Remove any existing checkpoint data files
