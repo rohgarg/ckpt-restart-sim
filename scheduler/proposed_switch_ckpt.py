@@ -220,12 +220,14 @@ def runApplication():
 # > proc: the ID of the launched DMTCP process (needed to know when the process dies)
 # OUTPUTS:
 # > None
-def waitTillFailure(proc):
+def waitTillFailure(proc, failureTime):
 
 	global gvStartTime, gvDone, gvStatsLock, gvCurrentApp, gvTotalFL
 
 	# Calculate when the next failure should take place
-	nextFailure = int(random.weibullvariate(WEIBULL_SCALE, WEIBULL_SHAPE))
+	nextFailure = failureTime
+	if failureTime == 0:
+		nextFailure = int(random.weibullvariate(WEIBULL_SCALE, WEIBULL_SHAPE))
 
 	# Holds the reason for exisitng the while loop below
 	switch = False
@@ -248,6 +250,10 @@ def waitTillFailure(proc):
 		# --kill may block while the application is ckpting
 		#subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
 		proc.send_signal(9);
+		nextFailure = 0;
+	else:
+		nextFailure = nextFailure - timeDiff
+		
 
 	# Acquire the lock on calculate stats
 	gvStatsLock.acquire()
@@ -271,6 +277,8 @@ def waitTillFailure(proc):
 	# Release the lock on calculate stats
 	gvStatsLock.release()
 
+	return nextFailure
+
 # DESCRIPTION:
 # > This function (thread) keeps running the application and injects failures
 # > It keeps doing this until the runtime has ended
@@ -282,11 +290,12 @@ def scheduleApps():
 
 	global gvDone
 
+	failureTime = 0
 	while(gvDone is False):
 		proc = runApplication()
 		if (gvDone):
 			break
-		waitTillFailure(proc)
+		failureTime = waitTillFailure(proc, failureTime)
 
 # DESCRIPTION:
 # > This function (thread) sleeps until its time to end the run
