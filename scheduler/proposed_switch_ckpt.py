@@ -62,8 +62,7 @@ gvTotalUW = [0]*2                # Total useful work done by app 1 and 2
 gvTotalLW = [0]*2                # Total lost work of app 1 and 2
 gvTotalRT = [0]*2                # Total run time of app 1 and 2
 gvTotalCP = [0]*2                # Total number of checkpoints during app 1 and 2
-
-gvTotalFL = 0                    # Total number of system failures
+gvTotalFL = [0]*2                # Total number of failures for app 1 and 2
 
 gvCurrentApp = 0                 # The ID of the currently running app
 
@@ -99,6 +98,7 @@ def printStats():
 	string += "Lost Work            = " + str("%.2f" % TotalLW[0]) + "h\n"
 	string += "Run Time             = " + str("%.2f" % TotalRT[0]) + "h\n"
 	string += "Num Checkpoints      = " + str(gvTotalCP[0]) + "\n"
+	string += "Num Failures         = " + str(gvTotalFL[0]) + "\n"
 	string += "\n"
 	string += "Process Name         = " + APP_NAME[1] + "\n"
 	string += "Checkpoint Time      = " + str("%.2f" % TotalCO[1]) + "h\n"
@@ -106,13 +106,14 @@ def printStats():
 	string += "Lost Work            = " + str("%.2f" % TotalLW[1]) + "h\n"
 	string += "Run Time             = " + str("%.2f" % TotalRT[1]) + "h\n"
 	string += "Num Checkpoints      = " + str(gvTotalCP[1]) + "\n"
+	string += "Num Failures         = " + str(gvTotalFL[1]) + "\n"
 	string += "\n"
 	string += "Total runtime statistics:\n"
 	string += "Checkpoint Time      = " + str("%.2f" % (TotalCO[0]+TotalCO[1])) + "h\n"
 	string += "Useful Work          = " + str("%.2f" % (TotalUW[0]+TotalUW[1])) + "h\n"
 	string += "Lost Work            = " + str("%.2f" % (TotalLW[0]+TotalLW[1])) + "h\n"
 	string += "Run Time             = " + str("%.2f" % (TotalRT[0]+TotalRT[1])) + "h\n"
-	string += "Num Failures         = " + str(gvTotalFL) + "\n"
+	string += "Num Failures         = " + str(gvTotalFL[0]+gvTotalFL[1]) + "\n"
 
 	print(string)
 
@@ -262,8 +263,8 @@ def waitTillFailure(proc):
 		if switch:
 			gvCurrentApp = 1
 		else:
+			gvTotalFL[gvCurrentApp] += 1
 			gvCurrentApp = 0
-			gvTotalFL += 1
 
 		gvStartTime = time.time()
 

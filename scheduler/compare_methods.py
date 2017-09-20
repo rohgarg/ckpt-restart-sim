@@ -50,14 +50,14 @@ gvTotalUWS = [0]*2                # Total useful work done by app 1 and 2
 gvTotalLWS = [0]*2                # Total lost work of app 1 and 2
 gvTotalRTS = [0]*2                # Total run time of app 1 and 2
 gvTotalCPS = [0]*2                # Total number of checkpoints during app 1 and 2
+gvTotalFLS = [0]*2                # Total number of failures
 
 gvTotalCOI = [0]*2                # Total checkpointing overhead of app 1 and 2
 gvTotalUWI = [0]*2                # Total useful work done by app 1 and 2
 gvTotalLWI = [0]*2                # Total lost work of app 1 and 2
 gvTotalRTI = [0]*2                # Total run time of app 1 and 2
 gvTotalCPI = [0]*2                # Total number of checkpoints during app 1 and 2
-
-gvTotalFL = [0]*2                 # Total number of system failures
+gvTotalFLI = [0]*2                # Total number of failures
 
 # Functions #
 
@@ -74,25 +74,27 @@ def printStats():
 
 	string  = "\n                       Isolated		Switch Ckpt\n\n"
 	string += "Process Name         = " + APP_NAME[0] + "\n\n"
-	string += "Checkpoint Time      = " + gvTotalCOI[0] + "		"  + gvTotalCOS[0] + "\n"
-	string += "Useful Work          = " + gvTotalUWI[0] + "		"  + gvTotalUWS[0] + "\n"
-	string += "Lost Work            = " + gvTotalLWI[0] + "		"  + gvTotalLWS[0] + "\n"
-	string += "Run Time             = " + gvTotalRTI[0] + "		"  + gvTotalRTS[0] + "\n"
-	string += "Num Checkpoints      = " + gvTotalCPI[0] + "		"  + gvTotalCPS[0] + "\n"
+	string += "Checkpoint Time      = " + gvTotalCOI[0] + "		" + gvTotalCOS[0] + "\n"
+	string += "Useful Work          = " + gvTotalUWI[0] + "		" + gvTotalUWS[0] + "\n"
+	string += "Lost Work            = " + gvTotalLWI[0] + "		" + gvTotalLWS[0] + "\n"
+	string += "Run Time             = " + gvTotalRTI[0] + "		" + gvTotalRTS[0] + "\n"
+	string += "Num Checkpoints      = " + gvTotalCPI[0] + "		" + gvTotalCPS[0] + "\n"
+	string += "Num Failures         = " + gvTotalFLI[0] + "		" + gvTotalFLS[0] + "\n"
 	string += "\n"
 	string += "Process Name         = " + APP_NAME[1] + "\n\n"
-	string += "Checkpoint Time      = " + gvTotalCOI[1] + "		"  + gvTotalCOS[1] + "\n"
-	string += "Useful Work          = " + gvTotalUWI[1] + "		"  + gvTotalUWS[1] + "\n"
-	string += "Lost Work            = " + gvTotalLWI[1] + "		"  + gvTotalLWS[1] + "\n"
-	string += "Run Time             = " + gvTotalRTI[1] + "		"  + gvTotalRTS[1] + "\n"
-	string += "Num Checkpoints      = " + gvTotalCPI[1] + "		"  + gvTotalCPS[1] + "\n"
+	string += "Checkpoint Time      = " + gvTotalCOI[1] + "		" + gvTotalCOS[1] + "\n"
+	string += "Useful Work          = " + gvTotalUWI[1] + "		" + gvTotalUWS[1] + "\n"
+	string += "Lost Work            = " + gvTotalLWI[1] + "		" + gvTotalLWS[1] + "\n"
+	string += "Run Time             = " + gvTotalRTI[1] + "		" + gvTotalRTS[1] + "\n"
+	string += "Num Checkpoints      = " + gvTotalCPI[1] + "		" + gvTotalCPS[1] + "\n"
+	string += "Num Failures         = " + gvTotalFLI[1] + "		" + gvTotalFLS[1] + "\n"
 	string += "\n"
 	string += "Total runtime statistics:" + "\n\n"
 	string += "Checkpoint Time      = " + str(float(gvTotalCOI[0].split('h')[0])+float(gvTotalCOI[1].split('h')[0])) + "h		"  + str(float(gvTotalCOS[0].split('h')[0])+float(gvTotalCOS[1].split('h')[0])) + "h\n"
 	string += "Useful Work          = " + str(float(gvTotalUWI[0].split('h')[0])+float(gvTotalUWI[1].split('h')[0])) + "h		"  + str(float(gvTotalUWS[0].split('h')[0])+float(gvTotalUWS[1].split('h')[0])) + "h\n"
 	string += "Lost Work            = " + str(float(gvTotalLWI[0].split('h')[0])+float(gvTotalLWI[1].split('h')[0])) + "h		"  + str(float(gvTotalLWS[0].split('h')[0])+float(gvTotalLWS[1].split('h')[0])) + "h\n"
 	string += "Run Time             = " + str(float(gvTotalRTI[0].split('h')[0])+float(gvTotalRTI[1].split('h')[0])) + "h		"  + str(float(gvTotalRTS[0].split('h')[0])+float(gvTotalRTS[1].split('h')[0])) + "h\n"
-	string += "Num Failures         = " + str(gvTotalFL[1]) + "		" + str(gvTotalFL[0]) + "\n"
+	string += "Num Failures         = " + str(int(gvTotalFLI[0])+int(gvTotalFLI[1])) + "		" + str(int(gvTotalFLS[0])+int(gvTotalFLS[1])) + "\n"
 
 	print(string)
 
@@ -158,18 +160,19 @@ def main():
 	string += '-n ' + CKPT_INTERVAL[1] + ' '
 	string += '-w ' + WEIBULL_SHAPE + ' '
 	string += '-s ' + SCALE_FACTOR
+	print ("Now running: " + string)
 	proc1 = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
 
 	app = 0
 	for line in proc1.stdout:
 		line = line.rstrip().strip()
-		if app == 2:
-			if "Failures" in line:
-				gvTotalFL[0] = int(line.split('= ')[1])
-			continue
+		if "Failures" in line:
+			gvTotalFLS[app] = line.split('= ')[1]
+			app += 1
+			if app == 2:
+				break
 		if "Num Checkpoints" in line:
 			gvTotalCPS[app] = line.split('= ')[1]
-			app += 1
 		elif "Checkpoint" in line:
 			gvTotalCOS[app] = line.split('= ')[1]
 		elif "Useful" in line:
@@ -187,6 +190,7 @@ def main():
 	string += '-i ' + CKPT_INTERVAL[0] + ' '
 	string += '-w ' + WEIBULL_SHAPE + ' '
 	string += '-s ' + SCALE_FACTOR
+	print ("Now running: " + string)
 	proc2 = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
 
 	for line in proc2.stdout:
@@ -202,8 +206,8 @@ def main():
 		elif "Run" in line:
 			gvTotalRTI[0] = line.split('= ')[1]
 		elif "Failures" in line:
-			gvTotalFL[1] = int(line.split('= ')[1])
-
+			gvTotalFLI[0] = line.split('= ')[1]
+	
 	string  = 'python isolated_app.py '
 	string += '-d ' + DMTCP_PATH + ' '
 	string += '-n ' + APP_NAME[1] + ' '
@@ -212,6 +216,7 @@ def main():
 	string += '-i ' + CKPT_INTERVAL[1] + ' '
 	string += '-w ' + WEIBULL_SHAPE + ' '
 	string += '-s ' + SCALE_FACTOR
+	print ("Now running: " + string)
 	proc3 = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
 
 	for line in proc3.stdout:
@@ -227,8 +232,8 @@ def main():
 		elif "Run" in line:
 			gvTotalRTI[1] = line.split('= ')[1]
 		elif "Failures" in line:
-			gvTotalFL[1] += int(line.split('= ')[1])
-
+			gvTotalFLI[1] = line.split('= ')[1]
+	
 	# Print the final statistics
 	printStats()
 

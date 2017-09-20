@@ -151,7 +151,6 @@ def runApplication():
 	
 	# Launch the application
 	string = ''
-
 	# If there are no checkpoint files, then start afresh
 	if (len(ckptFiles) == 0):
 		string = DMTCP_LAUNCH + " "
@@ -287,7 +286,9 @@ def verifyDmtcpPaths():
 # OUTPUTS:
 # > None
 def prepareCkptDirs():
-  
+ 
+	global APP_CKPT_DIR	
+ 
 	try:
 		if os.path.exists(GLOBAL_CKPT_DIR):
 			shutil.rmtree(GLOBAL_CKPT_DIR, ignore_errors=True)
