@@ -254,7 +254,6 @@ def waitTillFailure(proc, failureTime):
 	else:
 		nextFailure = nextFailure - timeDiff
 		
-
 	# Acquire the lock on calculate stats
 	gvStatsLock.acquire()
 
@@ -436,6 +435,9 @@ def main():
 	# Remove any generated checkpoint restart files
 	if (len(glob.glob('dmtcp_restart_script*.sh')) != 0):
 		subprocess.call('rm dmtcp_restart_script*.sh', shell=True)
+	
+	# Kill any exisiting dmtcp processes
+	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
 
 	exit()
 
