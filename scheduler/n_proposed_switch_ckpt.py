@@ -54,12 +54,12 @@ DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
 
 # Global Variables #
 
-gvTotalCO = [0]*2                # Total checkpointing overhead of app 1 and 2
-gvTotalUW = [0]*2                # Total useful work done by app 1 and 2
-gvTotalLW = [0]*2                # Total lost work of app 1 and 2
-gvTotalRT = [0]*2                # Total run time of app 1 and 2
-gvTotalCP = [0]*2                # Total number of checkpoints during app 1 and 2
-gvTotalFL = [0]*2                # Total number of failures for app 1 and 2
+gvTotalCO = None                 # Total checkpointing overhead of individual apps
+gvTotalUW = None                 # Total useful work done by individual apps
+gvTotalLW = None                 # Total lost work of individual apps
+gvTotalRT = None                 # Total run time of individual apps
+gvTotalCP = None                 # Total number of checkpoints during individual apps
+gvTotalFL = None                 # Total number of failures for individual apps
 
 gvCurrentApp = 0                 # The ID of the currently running app
 
@@ -79,8 +79,7 @@ gvStatsLock = threading.Lock()   # The lock is used when the runtime statistics 
 # > None
 def printStats():
 
-	global gvTotalFL
-	global gvTotalCO, gvTotalUW, gvTotalLW, gvTotalRT, gvTotalCP
+	global gvTotalCO, gvTotalUW, gvTotalLW, gvTotalRT, gvTotalCP, gvTotalFL
 
 	# Scale back the values in seconds to hours
 	TotalCO = [(SECS_TO_HOURS(gvTotalCO[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalCO[1])*SCALE_FACTOR)]
@@ -321,6 +320,44 @@ def waitTillEOE():
 	gvStatsLock.release()
 
 # DESCRIPTION:
+# > This function sorts the n apps and creates pairs of light
+# > weight and heavy weight applications for scheduling.
+# INPUTS:
+# > None
+# OUTPUTS:
+# > None
+def sortApps():
+	
+	global APP_NAME, CKPT_INTERVAL	
+	global gvTotalCO, gvTotalUW, gvTotalLW, gvTotalRT, gvTotalCP
+
+	appDict = dict(zip(APP_NAME, CKPT_INTERVAL))
+	ckptIntDict = dict(zip(CKPT_INTERVAL, APP_NAME))
+
+	CKPT_INTERVAL.sort()
+	
+	index = 0
+	for i in range(0, (NUM_APPS/2)+1):
+		APP_NAME[index] = ckptIntDict[CKPT_INTERVAL[i]]
+		index = index + 1
+		if index >= NUM_APPS:
+			break
+		APP_NAME[index] = ckptIntDict[CKPT_INTERVAL[NUM_APPS-(i+1)]]
+		index = index + 1
+		if index >= NUM_APPS:
+			break
+	
+	for i in range(0, NUM_APPS):
+		CKPT_INTERVAL[i] = appDict[APP_NAME[i]]
+
+	gvTotalCO = [0]*NUM_APPS
+	gvTotalUW = [0]*NUM_APPS
+	gvTotalLW = [0]*NUM_APPS
+	gvTotalRT = [0]*NUM_APPS
+	gvTotalCP = [0]*NUM_APPS
+	gvTotalFL = [0]*NUM_APPS
+
+# DESCRIPTION:
 # > This function verifies that the path specified for the
 # > DMTCP root directory is a valid path, and that the binaries
 # > are present.
@@ -420,10 +457,12 @@ def main():
                 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
                 verifyDmtcpPaths()
 
-	
 	# Remove any existing checkpoint data files and add new ones
 	prepareCkptDirs()
-
+	
+	# Sort apps for scheduling
+	sortApps()
+		
 	'''	
 	# Kill any exisiting dmtcp processes
 	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
