@@ -171,7 +171,7 @@ def runApplication():
 		# Set the ckeckpointing interval
 		string += '-i ' + str(CKPT_INTERVAL[gvCurrentApp]) + ' '
 		# If the LW app is being started, set the --exit-after-ckpt option
-		if (gvCurrentApp == 0):
+		if ((gvCurrentApp % 2) == 0):
 			string += '--exit-after-ckpt ' + str(SWITCH_POINT) + ' '
 		string += '--ckptdir ' + APP_CKPT_DIR[gvCurrentApp] + ' '
 		string += APP_NAME[gvCurrentApp]
@@ -256,11 +256,12 @@ def waitTillFailure(proc, failureTime):
 		# If switching, move on to the HW app
 		# Else had a failure, so run the LW app
 		# And increment the number of failures
-		if switch:
-			gvCurrentApp = 1
-		else:
-			gvTotalFL[gvCurrentApp] += 1
+		if switch is False:
+			gvTotalFL[gvCurrentApp] += 1	
+		if (gvCurrentApp == (NUM_APPS - 1)):
 			gvCurrentApp = 0
+		else:
+			gvCurrentApp += 1
 
 		gvStartTime = time.time()
 
@@ -326,16 +327,21 @@ def sortApps():
 	global APP_NAME, CKPT_INTERVAL	
 	global gvTotalCO, gvTotalUW, gvTotalLW, gvTotalRT, gvTotalCP, gvTotalFL
 
+
+	# Sort the apps in pairs of LW and HW
 	tmpAppName = list(APP_NAME)
 	tmpCkptInt = list(CKPT_INTERVAL)
 	
 	for i in range(0, NUM_APPS):
-		index = tmpCkptInt.index(min(tmpCkptInt)) if ((i%2)==0) else tmpCkptInt.index(max(tmpCkptInt))
+		index = tmpCkptInt.index(min(tmpCkptInt))
+		if ((i % 2) == 1):
+			index = tmpCkptInt.index(max(tmpCkptInt))
 		APP_NAME[i] = tmpAppName[index]
 		CKPT_INTERVAL[i] = tmpCkptInt[index]
 		del tmpAppName[index]
 		del tmpCkptInt[index]
-			
+	
+	# Initialize the calculation varaibles
 	gvTotalCO = [0]*NUM_APPS
 	gvTotalUW = [0]*NUM_APPS
 	gvTotalLW = [0]*NUM_APPS
@@ -448,8 +454,7 @@ def main():
 	
 	# Sort apps for scheduling
 	sortApps()
-		
-	'''	
+
 	# Kill any exisiting dmtcp processes
 	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
 
@@ -472,7 +477,7 @@ def main():
 	
 	# Kill any exisiting dmtcp processes
 	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
-	'''
+	
 	exit()
 
 # Program beginning #
