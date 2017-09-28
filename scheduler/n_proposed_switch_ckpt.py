@@ -333,9 +333,9 @@ def verifyDmtcpPaths():
 	if not (os.path.isdir(DMTCP_PATH) and os.path.isdir(DMTCP_BIN) and \
 		os.path.isfile(DMTCP_LAUNCH) and os.path.isfile(DMTCP_RESTART) and \
 		os.path.isfile(DMTCP_COMMAND)):
-		print ("Please specify a valid path to the DMTCP root directory.\n" \
+		print ("ERROR: Please specify a valid path to the DMTCP root directory.\n" \
 		"Also, make sure to run configure and build within the DMTCP directory.\n")
-	exit(-1)
+		exit(-1)
 
 
 # DESCRIPTION:
@@ -352,6 +352,7 @@ def prepareCkptDirs():
 		if os.path.exists(GLOBAL_CKPT_DIR):
 			shutil.rmtree(GLOBAL_CKPT_DIR, ignore_errors=True)
 		os.makedirs(GLOBAL_CKPT_DIR)
+		APP_CKPT_DIR = [0]*NUM_APPS
 		for i in range(len(APP_NAME)):
 			APP_CKPT_DIR[i] = GLOBAL_CKPT_DIR + "/" + os.path.basename(APP_NAME[i])
 			os.makedirs(APP_CKPT_DIR[i])
@@ -377,8 +378,8 @@ def main():
 	parser = argparse.ArgumentParser(prog="swtch_ckpt_run", description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
 
 	parser.add_argument("-n", "--num-apps", type=int, help="The number of applications to run. Default = 2")
-	parser.add_argument("-a", "--app-name", type=str, nargs='+', help="The names of the applications.")
-	parser.add_argument("-i", "--ckpt-int", type=float, nargs='+', help="The checkpointing interval of the the n applications.")
+	parser.add_argument("-a", "--app-name", type=str, nargs='+', help="The names of the n applications. Specify in the same order as --ckpt-int.")
+	parser.add_argument("-i", "--ckpt-int", type=float, nargs='+', help="The checkpointing interval of the n applications. Specify in the same order as --app-name.")
 	parser.add_argument("-c", "--ckpts-lw", type=int, help="The number of checkpoints after which the low weight applications should switch. Default = 2")
 	parser.add_argument("-t", "--run-time", type=float, help="The total run time of the program in hours. Default = 100 hours")
 	parser.add_argument("-m", "--mtbf", type=float, help="The MTBF of the system. Default = 10 hours")
@@ -396,9 +397,12 @@ def main():
 		APP_NAME = args.app_name
 	if args.ckpt_int:
 		CKPT_INTERVAL = [int(HOURS_TO_SECS(app/SCALE_FACTOR)) for app in args.ckpt_int]
-	print (NUM_APPS)
-	print (APP_NAME)
-	print (CKPT_INTERVAL)
+	
+	# Verify that the number of apps is consistent accross the variables
+	if (NUM_APPS != len(APP_NAME)) or (NUM_APPS != len(CKPT_INTERVAL)):
+		print("ERROR: The number of apps in --app-name and --ckpt-int should be consistent with --num-apps.\n")
+		exit(-1)
+	
 	if args.ckpts_lw:
 		SWITCH_POINT = args.ckpts_lw
 	if args.run_time:
@@ -416,6 +420,7 @@ def main():
                 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
                 verifyDmtcpPaths()
 
+	
 	# Remove any existing checkpoint data files and add new ones
 	prepareCkptDirs()
 
