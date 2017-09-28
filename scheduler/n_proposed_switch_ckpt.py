@@ -82,34 +82,29 @@ def printStats():
 	global gvTotalCO, gvTotalUW, gvTotalLW, gvTotalRT, gvTotalCP, gvTotalFL
 
 	# Scale back the values in seconds to hours
-	TotalCO = [(SECS_TO_HOURS(gvTotalCO[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalCO[1])*SCALE_FACTOR)]
-	TotalUW = [(SECS_TO_HOURS(gvTotalUW[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalUW[1])*SCALE_FACTOR)]
-	TotalLW = [(SECS_TO_HOURS(gvTotalLW[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalLW[1])*SCALE_FACTOR)]
-	TotalRT = [(SECS_TO_HOURS(gvTotalRT[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalRT[1])*SCALE_FACTOR)]
+	TotalCO = [(SECS_TO_HOURS(i)*SCALE_FACTOR) for i in gvTotalCO]
+	TotalUW = [(SECS_TO_HOURS(i)*SCALE_FACTOR) for i in gvTotalUW]
+	TotalLW = [(SECS_TO_HOURS(i)*SCALE_FACTOR) for i in gvTotalLW]
+	TotalRT = [(SECS_TO_HOURS(i)*SCALE_FACTOR) for i in gvTotalRT]
 
-	string  = "\n"
-	string += "Process Name         = " + APP_NAME[0] + "\n"
-	string += "Checkpoint Time      = " + str("%.2f" % TotalCO[0]) + "h\n"
-	string += "Useful Work          = " + str("%.2f" % TotalUW[0]) + "h\n"
-	string += "Lost Work            = " + str("%.2f" % TotalLW[0]) + "h\n"
-	string += "Run Time             = " + str("%.2f" % TotalRT[0]) + "h\n"
-	string += "Num Checkpoints      = " + str(gvTotalCP[0]) + "\n"
-	string += "Num Failures         = " + str(gvTotalFL[0]) + "\n"
-	string += "\n"
-	string += "Process Name         = " + APP_NAME[1] + "\n"
-	string += "Checkpoint Time      = " + str("%.2f" % TotalCO[1]) + "h\n"
-	string += "Useful Work          = " + str("%.2f" % TotalUW[1]) + "h\n"
-	string += "Lost Work            = " + str("%.2f" % TotalLW[1]) + "h\n"
-	string += "Run Time             = " + str("%.2f" % TotalRT[1]) + "h\n"
-	string += "Num Checkpoints      = " + str(gvTotalCP[1]) + "\n"
-	string += "Num Failures         = " + str(gvTotalFL[1]) + "\n"
+	string = ""
+	for i in range(0, NUM_APPS):
+		string += "\n"
+		string += "Process Name         = " + APP_NAME[i] + "\n"
+		string += "Checkpoint Time      = " + str("%.2f" % TotalCO[i]) + "h\n"
+		string += "Useful Work          = " + str("%.2f" % TotalUW[i]) + "h\n"
+		string += "Lost Work            = " + str("%.2f" % TotalLW[i]) + "h\n"
+		string += "Run Time             = " + str("%.2f" % TotalRT[i]) + "h\n"
+		string += "Num Checkpoints      = " + str(gvTotalCP[i]) + "\n"
+		string += "Num Failures         = " + str(gvTotalFL[i]) + "\n"
+
 	string += "\n"
 	string += "Total runtime statistics:\n"
-	string += "Checkpoint Time      = " + str("%.2f" % (TotalCO[0]+TotalCO[1])) + "h\n"
-	string += "Useful Work          = " + str("%.2f" % (TotalUW[0]+TotalUW[1])) + "h\n"
-	string += "Lost Work            = " + str("%.2f" % (TotalLW[0]+TotalLW[1])) + "h\n"
-	string += "Run Time             = " + str("%.2f" % (TotalRT[0]+TotalRT[1])) + "h\n"
-	string += "Num Failures         = " + str(gvTotalFL[0]+gvTotalFL[1]) + "\n"
+	string += "Checkpoint Time      = " + str("%.2f" % sum(TotalCO)) + "h\n"
+	string += "Useful Work          = " + str("%.2f" % sum(TotalUW)) + "h\n"
+	string += "Lost Work            = " + str("%.2f" % sum(TotalLW)) + "h\n"
+	string += "Run Time             = " + str("%.2f" % sum(TotalRT)) + "h\n"
+	string += "Num Failures         = " + str(sum(gvTotalFL)) + "\n"
 
 	print(string)
 
@@ -329,27 +324,18 @@ def waitTillEOE():
 def sortApps():
 	
 	global APP_NAME, CKPT_INTERVAL	
-	global gvTotalCO, gvTotalUW, gvTotalLW, gvTotalRT, gvTotalCP
+	global gvTotalCO, gvTotalUW, gvTotalLW, gvTotalRT, gvTotalCP, gvTotalFL
 
-	appDict = dict(zip(APP_NAME, CKPT_INTERVAL))
-	ckptIntDict = dict(zip(CKPT_INTERVAL, APP_NAME))
-
-	CKPT_INTERVAL.sort()
-	
-	index = 0
-	for i in range(0, (NUM_APPS/2)+1):
-		APP_NAME[index] = ckptIntDict[CKPT_INTERVAL[i]]
-		index = index + 1
-		if index >= NUM_APPS:
-			break
-		APP_NAME[index] = ckptIntDict[CKPT_INTERVAL[NUM_APPS-(i+1)]]
-		index = index + 1
-		if index >= NUM_APPS:
-			break
+	tmpAppName = list(APP_NAME)
+	tmpCkptInt = list(CKPT_INTERVAL)
 	
 	for i in range(0, NUM_APPS):
-		CKPT_INTERVAL[i] = appDict[APP_NAME[i]]
-
+		index = tmpCkptInt.index(min(tmpCkptInt)) if ((i%2)==0) else tmpCkptInt.index(max(tmpCkptInt))
+		APP_NAME[i] = tmpAppName[index]
+		CKPT_INTERVAL[i] = tmpCkptInt[index]
+		del tmpAppName[index]
+		del tmpCkptInt[index]
+			
 	gvTotalCO = [0]*NUM_APPS
 	gvTotalUW = [0]*NUM_APPS
 	gvTotalLW = [0]*NUM_APPS
