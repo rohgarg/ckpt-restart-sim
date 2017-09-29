@@ -6,6 +6,7 @@ import sys, argparse
 import shlex, glob
 import os, subprocess, threading, shutil
 import time, math, random
+import errno
 from scipy.special import gamma
 
 # Global functions #
@@ -350,9 +351,10 @@ def prepareCkptDirs():
       shutil.rmtree(GLOBAL_CKPT_DIR, ignore_errors=True)
     os.makedirs(GLOBAL_CKPT_DIR)
     for i in range(len(APP_NAME)):
-      APP_CKPT_DIR[i] = GLOBAL_CKPT_DIR + "/" + os.path.basename(APP_NAME[i])
+      APP_CKPT_DIR[i] = GLOBAL_CKPT_DIR + "/" + os.path.basename(APP_NAME[i]).split(" ")[0]
       os.makedirs(APP_CKPT_DIR[i])
   except OSError as e:
+    print("WHAT")
     if e.errno != errno.EEXIST:
       raise
 
@@ -438,7 +440,7 @@ def main():
 	
 	# Kill any exisiting dmtcp processes
 	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
-
+	
 	exit()
 
 # Program beginning #
