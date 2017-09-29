@@ -289,7 +289,7 @@ def verifyDmtcpPaths():
 def prepareCkptDirs():
  
 	global APP_CKPT_DIR	
- 
+	
 	try:
 		if os.path.exists(GLOBAL_CKPT_DIR):
 			shutil.rmtree(GLOBAL_CKPT_DIR, ignore_errors=True)
@@ -347,10 +347,10 @@ def main():
                 DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
                 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
                 verifyDmtcpPaths()
-
+	
 	# Remove any existing checkpoint data files
 	prepareCkptDirs()
-		
+	
 	# Kill any exisiting dmtcp processes
 	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
 

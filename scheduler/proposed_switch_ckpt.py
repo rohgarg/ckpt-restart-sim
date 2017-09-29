@@ -354,7 +354,6 @@ def prepareCkptDirs():
       APP_CKPT_DIR[i] = GLOBAL_CKPT_DIR + "/" + os.path.basename(APP_NAME[i]).split(" ")[0]
       os.makedirs(APP_CKPT_DIR[i])
   except OSError as e:
-    print("WHAT")
     if e.errno != errno.EEXIST:
       raise
 
