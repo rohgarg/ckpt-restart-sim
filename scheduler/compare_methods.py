@@ -151,8 +151,8 @@ def main():
 
 	string  = 'python proposed_switch_ckpt.py '
 	string += '-d ' + DMTCP_PATH + ' '
-	string += '-l ' + APP_NAME[0] + ' '
-	string += '-g ' + APP_NAME[1] + ' '
+	string += '-l \"' + APP_NAME[0] + '\" '
+	string += '-g \"' + APP_NAME[1] + '\" '
 	string += '-t ' + TOTAL_TIME + ' '
 	string += '-m ' + MTBF + ' '
 	string += '-c ' + NUM_CKPTS_LW + ' '
@@ -184,7 +184,7 @@ def main():
 
 	string  = 'python isolated_app.py '
 	string += '-d ' + DMTCP_PATH + ' '
-	string += '-n ' + APP_NAME[0] + ' '
+	string += '-n \"' + APP_NAME[0] + '\" '
 	string += '-t ' + str(float(TOTAL_TIME)/2) + ' '
 	string += '-m ' + MTBF + ' '
 	string += '-i ' + CKPT_INTERVAL[0] + ' '
@@ -210,7 +210,7 @@ def main():
 	
 	string  = 'python isolated_app.py '
 	string += '-d ' + DMTCP_PATH + ' '
-	string += '-n ' + APP_NAME[1] + ' '
+	string += '-n \"' + APP_NAME[1] + '\" '
 	string += '-t ' + str(float(TOTAL_TIME)/2) + ' '
 	string += '-m ' + MTBF + ' '
 	string += '-i ' + CKPT_INTERVAL[1] + ' '
