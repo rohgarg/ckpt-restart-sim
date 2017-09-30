@@ -56,6 +56,8 @@ DMTCP_LAUNCH = DMTCP_BIN + "/dmtcp_launch"
 DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
 
+DMTCP_OPTS = ""
+
 # Global Variables #
 
 gvTotalCO = [0]*2                # Total checkpointing overhead of app 1 and 2
@@ -177,7 +179,8 @@ def runApplication():
 
 	# If there are no checkpoint files, then start afresh
 	if (len(ckptFiles) == 0):
-		string = DMTCP_LAUNCH + " "
+		string  = DMTCP_LAUNCH + " "
+		string += DMTCP_OPTS + " "
 		# Set the ckeckpointing interval
 		string += '-i ' + str(CKPT_INTERVAL[gvCurrentApp]) + ' '
 		# If the LW app is being started, set the --exit-after-ckpt option
@@ -198,7 +201,8 @@ def runApplication():
 					ckptFile = fle
 					break
 
-		string = DMTCP_RESTART + " "
+		string  = DMTCP_RESTART + " "
+		string += DMTCP_OPTS + " "
 		# Set the ckeckpointing interval
 		string += '-i ' + str(CKPT_INTERVAL[gvCurrentApp]) + ' '
 		# If the LW app is being started, set the --exit-after-ckpt option
@@ -334,28 +338,28 @@ def waitTillEOE():
 # > None
 def verifyDmtcpPaths():
 
-  global DMTCP_PATH, DMTCP_BIN, DMTCP_LAUNCH, DMTCP_RESTART, DMTCP_COMMAND
-
-  if not (os.path.isdir(DMTCP_PATH) and os.path.isdir(DMTCP_BIN) and \
-          os.path.isfile(DMTCP_LAUNCH) and os.path.isfile(DMTCP_RESTART) and \
-          os.path.isfile(DMTCP_COMMAND)):
-     print("Please specify a valid path to the DMTCP root directory.\n" \
-           "Also, make sure to run configure and build within the DMTCP directory.\n")
-     exit(-1)
+	if not (os.path.isdir(DMTCP_PATH) and os.path.isdir(DMTCP_BIN) and \
+		os.path.isfile(DMTCP_LAUNCH) and os.path.isfile(DMTCP_RESTART) and \
+		os.path.isfile(DMTCP_COMMAND)):
+		print("Please specify a valid path to the DMTCP root directory.\n" \
+		"Also, make sure to run configure and build within the DMTCP directory.\n")
+		exit(-1)
 
 
 def prepareCkptDirs():
-  global GLOBAL_CKPT_DIR, APP_NAME, APP_CKPT_DIR
-  try:
-    if os.path.exists(GLOBAL_CKPT_DIR):
-      shutil.rmtree(GLOBAL_CKPT_DIR, ignore_errors=True)
-    os.makedirs(GLOBAL_CKPT_DIR)
-    for i in range(len(APP_NAME)):
-      APP_CKPT_DIR[i] = GLOBAL_CKPT_DIR + "/" + os.path.basename(APP_NAME[i]).split(" ")[0]
-      os.makedirs(APP_CKPT_DIR[i])
-  except OSError as e:
-    if e.errno != errno.EEXIST:
-      raise
+
+	global APP_CKPT_DIR
+
+	try:
+		if os.path.exists(GLOBAL_CKPT_DIR):
+			shutil.rmtree(GLOBAL_CKPT_DIR, ignore_errors=True)
+		os.makedirs(GLOBAL_CKPT_DIR)
+		for i in range(len(APP_NAME)):
+			APP_CKPT_DIR[i] = GLOBAL_CKPT_DIR + "/" + os.path.basename(APP_NAME[i]).split(" ")[0]
+			os.makedirs(APP_CKPT_DIR[i])
+	except OSError as e:
+		if e.errno != errno.EEXIST:
+			raise
 
 # DESCRIPTION:
 # > Main function parses arguments and starts the threads
@@ -370,6 +374,7 @@ def main():
 	global CKPT_INTERVAL, NUM_CKPTS_LW, APP_NAME
 	global DMTCP_PATH, DMTCP_BIN, DMTCP_LAUNCH, DMTCP_RESTART, DMTCP_COMMAND
 	global SCALE_FACTOR
+	global DMTCP_OPTS
 
 	# Parse the arguments and set the global constants
 	parser = argparse.ArgumentParser(prog="swtch_ckpt_run", description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
@@ -384,6 +389,7 @@ def main():
 	parser.add_argument("-n", "--ckpt-int-hw", type=float, help="The checkpointing interval of the high weight application. Default = 5 hours.")
 	parser.add_argument("-w", "--weibull-shape", type=float, help="The shape parameter of the Weibull failure curve. Default = 0.6.")
 	parser.add_argument("-s", "--scale-factor", type=float, help="The paramter to scale hours to seconds. Default = 1800.")
+	parser.add_argument("-o", "--dmtcp-opts", type=str, help="Specify any additional options in a string format.")
 	
 	args = parser.parse_args()
 
@@ -413,6 +419,8 @@ def main():
                 DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
                 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
                 verifyDmtcpPaths()
+	if args.dmtcp_opts:
+		DMTCP_OPTS = args.dmtcp_opts
 
 	# Remove any existing checkpoint data files
 	prepareCkptDirs()
