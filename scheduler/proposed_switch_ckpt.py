@@ -172,7 +172,8 @@ def runApplication():
 	global APP_NAME, APP_CKPT_DIR
 
 	# List of current app's checkpoint files
-	ckptFiles = glob.glob(APP_CKPT_DIR[gvCurrentApp] + '/' + 'ckpt_*.dmtcp')
+	# ckptFiles = glob.glob(APP_CKPT_DIR[gvCurrentApp] + '/' + 'ckpt_*.dmtcp')
+	ckptFiles = glob.glob(APP_CKPT_DIR[gvCurrentApp] + '/' + 'dmtcp_restart_script_*.sh')
 	
 	# Launch the currently set application
 	string = ''
@@ -201,15 +202,16 @@ def runApplication():
 					ckptFile = fle
 					break
 
-		string  = DMTCP_RESTART + " "
-		string += DMTCP_OPTS + " "
+		# string  = DMTCP_RESTART + " "
+		# string += DMTCP_OPTS + " "
+		string += ckptFile + ' '
 		# Set the ckeckpointing interval
 		string += '-i ' + str(CKPT_INTERVAL[gvCurrentApp]) + ' '
 		# If the LW app is being started, set the --exit-after-ckpt option
 		if (gvCurrentApp == 0):
 			string += '--exit-after-ckpt ' + str(NUM_CKPTS_LW) + ' '
 		string += '--ckptdir ' + APP_CKPT_DIR[gvCurrentApp] + ' '
-		string += ckptFile
+		# string += ckptFile
 
 	# Set the new start time of the run
 	gvStartTime = time.time()
