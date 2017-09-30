@@ -52,6 +52,8 @@ DMTCP_LAUNCH = DMTCP_BIN + "/dmtcp_launch"
 DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
 
+DMTCP_OPTS = ""
+
 # Global Variables #
 
 gvTotalCO = 0                    # Total checkpointing overhead of the app 
@@ -154,7 +156,8 @@ def runApplication():
 	string = ''
 	# If there are no checkpoint files, then start afresh
 	if (len(ckptFiles) == 0):
-		string = DMTCP_LAUNCH + " "
+		string  = DMTCP_LAUNCH + " "
+		string += DMTCP_OPTS + " "
 		# Set the ckeckpointing interval
 		string += '-i ' + str(CKPT_INTERVAL) + ' '
 		string += '--ckptdir ' + APP_CKPT_DIR + ' '
@@ -172,7 +175,8 @@ def runApplication():
 					ckptFile = fle
 					break
 
-		string = DMTCP_RESTART + " "
+		string  = DMTCP_RESTART + " "
+		string += DMTCP_OPTS + " "
 		# Set the ckeckpointing interval
 		string += '-i ' + str(CKPT_INTERVAL) + ' '
 		string += '--ckptdir ' + APP_CKPT_DIR + ' '
@@ -313,6 +317,7 @@ def main():
 	global CKPT_INTERVAL, APP_NAME
 	global DMTCP_PATH, DMTCP_BIN, DMTCP_LAUNCH, DMTCP_RESTART, DMTCP_COMMAND
 	global SCALE_FACTOR
+	global DMTCP_OPTS
 
 	# Parse the arguments and set the global constants
 	parser = argparse.ArgumentParser(prog="isolated_run", description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
@@ -324,6 +329,7 @@ def main():
 	parser.add_argument("-i", "--ckpt-int", type=float, help="The checkpointing interval of the low weight application. Default = 1 hour.")
 	parser.add_argument("-w", "--weibull-shape", type=float, help="The shape parameter of the Weibull failure curve. Default = 0.6.")
 	parser.add_argument("-s", "--scale-factor", type=float, help="The parameter to scale hous to seconds. Default = 1800.")	
+	parser.add_argument("-o", "--dmtcp-opts", type=str, help="Specify any additional options in a string format.")
 
 	args = parser.parse_args()
 
@@ -347,6 +353,8 @@ def main():
                 DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
                 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
                 verifyDmtcpPaths()
+	if args.dmtcp_opts:
+		DMTCP_OPTS = args.dmtcp_opts
 	
 	# Remove any existing checkpoint data files
 	prepareCkptDirs()
