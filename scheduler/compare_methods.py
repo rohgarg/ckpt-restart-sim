@@ -9,12 +9,6 @@ import time, math, random
 
 # Global functions #
 
-def HOURS_TO_SECS(x):
-	return x*3600
-
-def SECS_TO_HOURS(x):
-	return x/3600
-
 '''
 VARIABLE FORMAT
 Contstants          :- All captial letters
@@ -111,6 +105,7 @@ def main():
 	global CKPT_INTERVAL, NUM_CKPTS_LW, APP_NAME
 	global DMTCP_PATH
 	global SCALE_FACTOR
+	global DMTCP_OPTS
 
 	# Parse the arguments and set the global constants
 	parser = argparse.ArgumentParser(prog="compare_methods", description=DESCRIPTION, formatter_class=argparse.RawTextHelpFormatter)
@@ -125,6 +120,7 @@ def main():
 	parser.add_argument("-n", "--ckpt-int-hw", type=str, help="The checkpointing interval of the high weight application. Default = 5 hours.")
 	parser.add_argument("-w", "--weibull-shape", type=str, help="The shape parameter of the Weibull failure curve. Default = 0.6.")
 	parser.add_argument("-s", "--scale-factor", type=str, help="The parameter to scale hours to seconds. Default = 1800.")	
+	parser.add_argument("-o", "--dmtcp-opts", type=str, help="Specify any additional options in a string format.")
 
 	args = parser.parse_args()
 
@@ -148,6 +144,8 @@ def main():
 		WEIBULL_SHAPE = args.weibull_shape
 	if args.scale_factor:
 		SCALE_FACTOR = args.scale_factor
+	if args.dmtcp_opts:
+		DMTCP_OPTS = args.dmtcp_opts
 
 	string  = 'python proposed_switch_ckpt.py '
 	string += '-d ' + DMTCP_PATH + ' '
@@ -159,7 +157,8 @@ def main():
 	string += '-i ' + CKPT_INTERVAL[0] + ' '
 	string += '-n ' + CKPT_INTERVAL[1] + ' '
 	string += '-w ' + WEIBULL_SHAPE + ' '
-	string += '-s ' + SCALE_FACTOR
+	string += '-s ' + SCALE_FACTOR + ' '
+	string += '-o \"' + DMTCP_OPTS + '\"'
 	print ("Now running: " + string)
 	proc1 = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
 
@@ -189,7 +188,8 @@ def main():
 	string += '-m ' + MTBF + ' '
 	string += '-i ' + CKPT_INTERVAL[0] + ' '
 	string += '-w ' + WEIBULL_SHAPE + ' '
-	string += '-s ' + SCALE_FACTOR
+	string += '-s ' + SCALE_FACTOR + ' '
+	string += '-o \"' + DMTCP_OPTS + '\"'
 	print ("Now running: " + string)
 	proc2 = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
 
@@ -215,7 +215,8 @@ def main():
 	string += '-m ' + MTBF + ' '
 	string += '-i ' + CKPT_INTERVAL[1] + ' '
 	string += '-w ' + WEIBULL_SHAPE + ' '
-	string += '-s ' + SCALE_FACTOR
+	string += '-s ' + SCALE_FACTOR + ' '
+	string += '-o \"' + DMTCP_OPTS + '\"'
 	print ("Now running: " + string)
 	proc3 = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
 
