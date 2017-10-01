@@ -94,7 +94,7 @@ def printStats():
 	TotalLW = [(SECS_TO_HOURS(gvTotalLW[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalLW[1])*SCALE_FACTOR)]
 	TotalRT = [(SECS_TO_HOURS(gvTotalRT[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalRT[1])*SCALE_FACTOR)]
 
-	string  = "\n"
+	string  = "RESULTS\n\n"
 	string += "Process Name         = " + APP_NAME[0] + "\n"
 	string += "Checkpoint Time      = " + str("%.2f" % TotalCO[0]) + "h\n"
 	string += "Useful Work          = " + str("%.2f" % TotalUW[0]) + "h\n"
@@ -214,6 +214,7 @@ def runApplication():
 		# string += ckptFile
 
 	# Set the new start time of the run
+	print(os.path.basename(__file__) + ": At time " + str(time.time()) + " starting " + string)
 	gvStartTime = time.time()
 
 	# Start the run
@@ -258,8 +259,10 @@ def waitTillFailure(proc, failureTime):
 		#subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
 		proc.send_signal(9);
 		nextFailure = 0;
+		print(os.path.basename(__file__) + ": Failure at " + str(timeDiff + gvStartTime))
 	else:
 		nextFailure = nextFailure - timeDiff
+		print(os.path.basename(__file__) + ": Switching at " + str(timeDiff + gvStartTime))
 		
 	# Acquire the lock on calculate stats
 	gvStatsLock.acquire()
