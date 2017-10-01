@@ -361,8 +361,11 @@ def main():
 	# Remove any existing checkpoint data files
 	prepareCkptDirs()
 	
-	# Kill any exisiting dmtcp processes
+	# Kill any exisiting dmtcp processes and remove ckpt log
 	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
+
+	if os.path.exists('jtimings.csv'):
+		subprocess.call('rm jtimings.csv', shell=True)
 
 	# Start the SAThread which runs the scheduleApps() function
 	SAThread = threading.Thread(target=scheduleApps, args=())
