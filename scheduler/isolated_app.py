@@ -89,7 +89,7 @@ def printStats():
 	TotalLW = SECS_TO_HOURS(gvTotalLW)*SCALE_FACTOR
 	TotalRT = SECS_TO_HOURS(gvTotalRT)*SCALE_FACTOR
 
-	string  = "\n"
+	string  = "RESULTS\n\n"
 	string += "Process Name         = " + APP_NAME + "\n"
 	string += "Checkpoint Time      = " + str("%.2f" % TotalCO) + "h\n"
 	string += "Useful Work          = " + str("%.2f" % TotalUW) + "h\n"
@@ -185,6 +185,7 @@ def runApplication():
 		# string += ckptFile
 
 	# Set the new start time of the run
+	print(os.path.basename(__file__) + ": At time " + str(time.time()) + " starting " + string)
 	gvStartTime = time.time()
 
 	# Start the run
@@ -211,6 +212,7 @@ def waitTillFailure(proc):
 	timeDiff = time.time() - gvStartTime
 
 	proc.send_signal(9);
+	print(os.path.basename(__file__) + ": Failure at " + str(timeDiff + gvStartTime))
 
 	# Acquire the lock on calculate stats
 	gvStatsLock.acquire()
