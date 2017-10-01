@@ -159,7 +159,7 @@ def main():
 	string += '-w ' + WEIBULL_SHAPE + ' '
 	string += '-s ' + SCALE_FACTOR + ' '
 	string += '-o \"' + DMTCP_OPTS + '\"'
-	print ("Now running: " + string)
+	print (os.path.basename(__file__) + ": Now running: " + string)
 	proc1 = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
 
 	app = 0
@@ -190,7 +190,7 @@ def main():
 	string += '-w ' + WEIBULL_SHAPE + ' '
 	string += '-s ' + SCALE_FACTOR + ' '
 	string += '-o \"' + DMTCP_OPTS + '\"'
-	print ("Now running: " + string)
+	print (os.path.basename(__file__) + ": Now running: " + string)
 	proc2 = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
 
 	for line in proc2.stdout:
@@ -217,7 +217,7 @@ def main():
 	string += '-w ' + WEIBULL_SHAPE + ' '
 	string += '-s ' + SCALE_FACTOR + ' '
 	string += '-o \"' + DMTCP_OPTS + '\"'
-	print ("Now running: " + string)
+	print (os.path.basename(__file__) + ": Now running: " + string)
 	proc3 = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
 
 	for line in proc3.stdout:
