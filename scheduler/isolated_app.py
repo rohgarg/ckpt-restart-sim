@@ -189,7 +189,7 @@ def runApplication():
 	gvStartTime = time.time()
 
 	# Start the run
-	proc = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
+	proc = subprocess.Popen(shlex.split(string), preexec_fn=os.setsid, stdout=subprocess.PIPE)
 
 	return proc
 
@@ -211,7 +211,7 @@ def waitTillFailure(proc):
 	# Caluclate the time which the app ran for during this instance
 	timeDiff = time.time() - gvStartTime
 
-	proc.send_signal(9);
+	os.killpg(os.getpgid(proc.pid), signal.SIGKILL);
 	print(os.path.basename(__file__) + ": Failure at " + str(timeDiff + gvStartTime))
 
 	# Acquire the lock on calculate stats

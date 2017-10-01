@@ -218,7 +218,7 @@ def runApplication():
 	gvStartTime = time.time()
 
 	# Start the run
-	proc = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
+	proc = subprocess.Popen(shlex.split(string), preexec_fn=os.setsid, stdout=subprocess.PIPE)
 
 	return proc
 
@@ -257,7 +257,7 @@ def waitTillFailure(proc, failureTime):
 	if switch is False:
 		# --kill may block while the application is ckpting
 		#subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
-		proc.send_signal(9);
+		os.killpg(os.getpgid(proc.pid), signal.SIGKILL);
 		nextFailure = 0;
 		print(os.path.basename(__file__) + ": Failure at " + str(timeDiff + gvStartTime))
 	else:
