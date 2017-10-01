@@ -94,7 +94,7 @@ def printStats():
 	TotalLW = [(SECS_TO_HOURS(gvTotalLW[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalLW[1])*SCALE_FACTOR)]
 	TotalRT = [(SECS_TO_HOURS(gvTotalRT[0])*SCALE_FACTOR), (SECS_TO_HOURS(gvTotalRT[1])*SCALE_FACTOR)]
 
-	string  = "\n"
+	string  = "RESULTS\n\n"
 	string += "Process Name         = " + APP_NAME[0] + "\n"
 	string += "Checkpoint Time      = " + str("%.2f" % TotalCO[0]) + "h\n"
 	string += "Useful Work          = " + str("%.2f" % TotalUW[0]) + "h\n"
@@ -214,10 +214,11 @@ def runApplication():
 		# string += ckptFile
 
 	# Set the new start time of the run
+	print(os.path.basename(__file__) + ": At time " + str(time.time()) + " starting " + string)
 	gvStartTime = time.time()
 
 	# Start the run
-	proc = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
+	proc = subprocess.Popen(shlex.split(string), preexec_fn=os.setsid, stdout=subprocess.PIPE)
 
 	return proc
 
@@ -256,10 +257,12 @@ def waitTillFailure(proc, failureTime):
 	if switch is False:
 		# --kill may block while the application is ckpting
 		#subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
-		proc.send_signal(9);
+		os.killpg(os.getpgid(proc.pid), signal.SIGKILL);
 		nextFailure = 0;
+		print(os.path.basename(__file__) + ": Failure at " + str(timeDiff + gvStartTime))
 	else:
 		nextFailure = nextFailure - timeDiff
+		print(os.path.basename(__file__) + ": Switching at " + str(timeDiff + gvStartTime))
 		
 	# Acquire the lock on calculate stats
 	gvStatsLock.acquire()
@@ -427,8 +430,11 @@ def main():
 	# Remove any existing checkpoint data files
 	prepareCkptDirs()
 	
-	# Kill any exisiting dmtcp processes
+	# Kill any exisiting dmtcp processes and remove ckpt log
 	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
+
+	if os.path.exists('jtimings.csv'):
+		subprocess.call('rm jtimings.csv', shell=True)
 
 	# Start the SAThread which runs the scheduleApps() function
 	SAThread = threading.Thread(target=scheduleApps, args=())

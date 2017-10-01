@@ -89,7 +89,7 @@ def printStats():
 	TotalLW = SECS_TO_HOURS(gvTotalLW)*SCALE_FACTOR
 	TotalRT = SECS_TO_HOURS(gvTotalRT)*SCALE_FACTOR
 
-	string  = "\n"
+	string  = "RESULTS\n\n"
 	string += "Process Name         = " + APP_NAME + "\n"
 	string += "Checkpoint Time      = " + str("%.2f" % TotalCO) + "h\n"
 	string += "Useful Work          = " + str("%.2f" % TotalUW) + "h\n"
@@ -185,10 +185,11 @@ def runApplication():
 		# string += ckptFile
 
 	# Set the new start time of the run
+	print(os.path.basename(__file__) + ": At time " + str(time.time()) + " starting " + string)
 	gvStartTime = time.time()
 
 	# Start the run
-	proc = subprocess.Popen(shlex.split(string), stdout=subprocess.PIPE)
+	proc = subprocess.Popen(shlex.split(string), preexec_fn=os.setsid, stdout=subprocess.PIPE)
 
 	return proc
 
@@ -210,7 +211,8 @@ def waitTillFailure(proc):
 	# Caluclate the time which the app ran for during this instance
 	timeDiff = time.time() - gvStartTime
 
-	proc.send_signal(9);
+	os.killpg(os.getpgid(proc.pid), signal.SIGKILL);
+	print(os.path.basename(__file__) + ": Failure at " + str(timeDiff + gvStartTime))
 
 	# Acquire the lock on calculate stats
 	gvStatsLock.acquire()
@@ -361,8 +363,11 @@ def main():
 	# Remove any existing checkpoint data files
 	prepareCkptDirs()
 	
-	# Kill any exisiting dmtcp processes
+	# Kill any exisiting dmtcp processes and remove ckpt log
 	subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
+
+	if os.path.exists('jtimings.csv'):
+		subprocess.call('rm jtimings.csv', shell=True)
 
 	# Start the SAThread which runs the scheduleApps() function
 	SAThread = threading.Thread(target=scheduleApps, args=())
