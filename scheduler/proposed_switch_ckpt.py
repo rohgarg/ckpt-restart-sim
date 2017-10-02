@@ -6,7 +6,7 @@ import sys, argparse
 import shlex, glob
 import os, subprocess, threading, shutil
 import time, math, random
-import errno
+import errno, signal, psutil
 from scipy.special import gamma
 
 # Global functions #
@@ -257,6 +257,9 @@ def waitTillFailure(proc, failureTime):
 	if switch is False:
 		# --kill may block while the application is ckpting
 		#subprocess.call(DMTCP_COMMAND + ' --kill', shell=True)
+		process = psutil.Process(proc.pid)
+		for child in process.children(recursive=True):
+			child.kill()
 		os.killpg(os.getpgid(proc.pid), signal.SIGKILL);
 		nextFailure = 0;
 		print(os.path.basename(__file__) + ": Failure at " + str(timeDiff + gvStartTime))

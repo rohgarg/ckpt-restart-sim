@@ -165,6 +165,7 @@ def main():
 	app = 0
 	for line in proc1.stdout:
 		line = line.rstrip().strip()
+		print(line)
 		if "Failures" in line:
 			gvTotalFLS[app] = line.split('= ')[1]
 			app += 1
@@ -195,6 +196,7 @@ def main():
 
 	for line in proc2.stdout:
 		line = line.rstrip().strip()
+		print(line)
 		if "Num Checkpoints" in line:
 			gvTotalCPI[0] = line.split('= ')[1]
 		elif "Checkpoint" in line:
@@ -222,6 +224,7 @@ def main():
 
 	for line in proc3.stdout:
 		line = line.rstrip().strip()
+		print(line)
 		if "Num Checkpoints" in line:
 			gvTotalCPI[1] = line.split('= ')[1]
 		elif "Checkpoint" in line:
