@@ -6,7 +6,7 @@ import sys, argparse
 import shlex, glob
 import os, subprocess, threading, shutil
 import time, math, random
-import errno
+import errno, signal
 from scipy.special import gamma
 
 # Global functions #
