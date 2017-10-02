@@ -6,7 +6,7 @@ import sys, argparse
 import shlex, glob
 import os, subprocess, threading, shutil
 import time, math, random
-import errno, signal
+import errno, signal, psutil
 from scipy.special import gamma
 
 # Global functions #
@@ -211,6 +211,9 @@ def waitTillFailure(proc):
 	# Caluclate the time which the app ran for during this instance
 	timeDiff = time.time() - gvStartTime
 
+	process = psutil.Process(proc.pid)
+	for child in process.children(recursive=True):
+		child.kill()
 	os.killpg(os.getpgid(proc.pid), signal.SIGKILL);
 	print(os.path.basename(__file__) + ": Failure at " + str(timeDiff + gvStartTime))
 
