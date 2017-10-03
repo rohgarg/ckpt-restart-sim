@@ -39,8 +39,8 @@ WEIBULL_SHAPE = 0.6                                     # Shape parameter for fa
 WEIBULL_SCALE = MTBF/gamma(1+(1/WEIBULL_SHAPE))         # Scale parameter for failure calculation
 
 CKPT_INTERVAL = [0]*2
-CKPT_INTERVAL[0] = int(HOURS_TO_SECS(1/SCALE_FACTOR))   # Checkpointing interval (or compute time per interval) for app 1
-CKPT_INTERVAL[1] = int(HOURS_TO_SECS(5/SCALE_FACTOR))   # Checkpointing interval (or compute time per interval) for app 2
+CKPT_INTERVAL[0] = int(round(HOURS_TO_SECS(1/SCALE_FACTOR)))   # Checkpointing interval (or compute time per interval) for app 1
+CKPT_INTERVAL[1] = int(round(HOURS_TO_SECS(5/SCALE_FACTOR)))   # Checkpointing interval (or compute time per interval) for app 2
 NUM_CKPTS_LW = 2                                        # Number of checkpoints after which app 1 should switch
 
 APP_NAME = ['app']*2
@@ -235,7 +235,7 @@ def waitTillFailure(proc, failureTime):
 	# Calculate when the next failure should take place
 	nextFailure = failureTime
 	if failureTime == 0:
-		nextFailure = int(random.weibullvariate(WEIBULL_SCALE, WEIBULL_SHAPE))
+		nextFailure = int(round(random.weibullvariate(WEIBULL_SCALE, WEIBULL_SHAPE)))
 
 	# Holds the reason for exisitng the while loop below
 	switch = False
@@ -411,9 +411,9 @@ def main():
 	if args.ckpts_lw:
 		NUM_CKPTS_LW = args.ckpts_lw
 	if args.ckpt_int_lw:
-		CKPT_INTERVAL[0] = int(HOURS_TO_SECS(args.ckpt_int_lw/SCALE_FACTOR))
+		CKPT_INTERVAL[0] = int(round(HOURS_TO_SECS(args.ckpt_int_lw/SCALE_FACTOR)))
 	if args.ckpt_int_hw:
-		CKPT_INTERVAL[1] = int(HOURS_TO_SECS(args.ckpt_int_hw/SCALE_FACTOR))
+		CKPT_INTERVAL[1] = int(round(HOURS_TO_SECS(args.ckpt_int_hw/SCALE_FACTOR)))
 	if args.weibull_shape:
 		WEIBULL_SHAPE = args.weibull_shape
 		WEIBULL_SCALE = MTBF/gamma(1+(1/WEIBULL_SHAPE))

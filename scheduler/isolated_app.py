@@ -38,7 +38,7 @@ MTBF = HOURS_TO_SECS(10/SCALE_FACTOR)                   # Mean time between fail
 WEIBULL_SHAPE = 0.6                                     # Shape parameter for failure calculation
 WEIBULL_SCALE = MTBF/gamma(1+(1/WEIBULL_SHAPE))         # Scale parameter for failure calculation
 
-CKPT_INTERVAL = int(HOURS_TO_SECS(5/SCALE_FACTOR))      # Checkpointing interval (or compute time per interval)
+CKPT_INTERVAL = int(round(HOURS_TO_SECS(5/SCALE_FACTOR)))      # Checkpointing interval (or compute time per interval)
 
 APP_NAME = '../dmtcp/test/dmtcp1'                       # Name of the app
 
@@ -204,7 +204,7 @@ def waitTillFailure(proc):
 	global gvStartTime, gvDone, gvStatsLock, gvTotalFL
 
 	# Calculate when the next failure should take place
-	nextFailure = int(random.weibullvariate(WEIBULL_SCALE, WEIBULL_SHAPE))
+	nextFailure = int(round(random.weibullvariate(WEIBULL_SCALE, WEIBULL_SHAPE)))
 
 	time.sleep(nextFailure)
 
@@ -346,7 +346,7 @@ def main():
 	if args.mtbf:
 		MTBF = HOURS_TO_SECS(args.mtbf/SCALE_FACTOR)
 	if args.ckpt_int:
-		CKPT_INTERVAL = int(HOURS_TO_SECS(args.ckpt_int/SCALE_FACTOR))
+		CKPT_INTERVAL = int(round(HOURS_TO_SECS(args.ckpt_int/SCALE_FACTOR)))
 	if args.weibull_shape:
 		WEIBULL_SHAPE = args.weibull_shape
 		WEIBULL_SCALE = MTBF/gamma(1+(1/WEIBULL_SHAPE))
