@@ -2,12 +2,15 @@
 
 # Import libraries #
 
+from __future__ import print_function
 import sys, argparse
 import shlex, glob
 import os, subprocess, threading, shutil
 import time, math, random
 import errno, signal, psutil
 from scipy.special import gamma
+from inspect import currentframe, getframeinfo
+from datetime import datetime
 
 # Global functions #
 
@@ -75,7 +78,20 @@ gvStartTime = time.time()        # The start time of the most recent run (after 
 
 gvStatsLock = threading.Lock()   # The lock is used when the runtime statistics are being calculated
 
+enableLogs = True
+
+LOG_FILE = None
+
 # Functions #
+def plog(msg):
+  global LOG_FILE
+  if enableLogs:
+    times = datetime.now().strftime('%H:%M:%S')
+    print("[%s:%d, %s]: %s" % (os.path.basename(__file__),
+                               currentframe().f_back.f_lineno,
+                               times,
+                               msg),
+          file=LOG_FILE)
 
 # DESCRIPTION:
 # > This function prints all the relevant values
@@ -150,7 +166,8 @@ def calculateStats(timeDiff):
 				locCP += 1
 	
 		# Remove the checkpoint timings log
-		subprocess.call('rm jtimings.csv', shell=True)
+		plog("Removing " + APP_CKPT_DIR[gvCurrentApp] + '/jtimings.csv')
+		os.remove(APP_CKPT_DIR[gvCurrentApp] + '/jtimings.csv')
 
 	# Useful Work is [checkpoint interval * number of checkpoints]
 	# Lost Work is [runtime - (checkpoint overhead + useful work)]
@@ -209,12 +226,15 @@ def runApplication():
 		string += '-i ' + str(CKPT_INTERVAL[gvCurrentApp]) + ' '
 		# If the LW app is being started, set the --exit-after-ckpt option
 		if (gvCurrentApp == 0):
+			string += '-h localhost -p 2556 '
 			string += '--exit-after-ckpt ' + str(NUM_CKPTS_LW) + ' '
+		else:
+			string += '-h localhost -p 5775 '
 		string += '--ckptdir ' + APP_CKPT_DIR[gvCurrentApp] + ' '
 		# string += ckptFile
 
 	# Set the new start time of the run
-	print(os.path.basename(__file__) + ": At time " + str(time.time()) + " starting " + string)
+	plog("At time " + str(time.time()) + " starting " + string)
 	gvStartTime = time.time()
 
 	# Start the run
@@ -262,10 +282,10 @@ def waitTillFailure(proc, failureTime):
 			child.kill()
 		os.killpg(os.getpgid(proc.pid), signal.SIGKILL);
 		nextFailure = 0;
-		print(os.path.basename(__file__) + ": Failure at " + str(timeDiff + gvStartTime))
+		plog("Failure at " + str(timeDiff + gvStartTime))
 	else:
 		nextFailure = nextFailure - timeDiff
-		print(os.path.basename(__file__) + ": Switching at " + str(timeDiff + gvStartTime))
+		plog("Switching at " + str(timeDiff + gvStartTime))
 		
 	# Acquire the lock on calculate stats
 	gvStatsLock.acquire()
@@ -382,6 +402,7 @@ def main():
 	global CKPT_INTERVAL, NUM_CKPTS_LW, APP_NAME
 	global DMTCP_PATH, DMTCP_BIN, DMTCP_LAUNCH, DMTCP_RESTART, DMTCP_COMMAND
 	global SCALE_FACTOR
+	global LOG_FILE
 	global DMTCP_OPTS
 
 	# Parse the arguments and set the global constants
@@ -397,6 +418,7 @@ def main():
 	parser.add_argument("-n", "--ckpt-int-hw", type=float, help="The checkpointing interval of the high weight application. Default = 5 hours.")
 	parser.add_argument("-w", "--weibull-shape", type=float, help="The shape parameter of the Weibull failure curve. Default = 0.6.")
 	parser.add_argument("-s", "--scale-factor", type=float, help="The paramter to scale hours to seconds. Default = 1800.")
+	parser.add_argument("--logfile", type=str, help="File for logging. (default: stdout)")
 	parser.add_argument("-o", "--dmtcp-opts", type=str, help="Specify any additional options in a string format.")
 	
 	args = parser.parse_args()
@@ -427,6 +449,10 @@ def main():
                 DMTCP_RESTART = DMTCP_BIN + "/dmtcp_restart"
                 DMTCP_COMMAND = DMTCP_BIN + "/dmtcp_command"
                 verifyDmtcpPaths()
+	if args.logfile:
+                LOG_FILE = open(args.logfile, "w", 0)
+	else:
+                LOG_FILE = sys.stdout
 	if args.dmtcp_opts:
 		DMTCP_OPTS = args.dmtcp_opts
 
